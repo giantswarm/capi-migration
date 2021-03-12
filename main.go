@@ -17,23 +17,25 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/giantswarm/capi-migration-controller/controllers"
+	"github.com/giantswarm/microerror"
+	"github.com/giantswarm/micrologger"
 	capiv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	// +kubebuilder:scaffold:imports
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme = runtime.NewScheme()
 )
 
 func init() {
@@ -44,6 +46,14 @@ func init() {
 }
 
 func main() {
+	err := mainE(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", microerror.Pretty(err, true))
+		os.Exit(2)
+	}
+}
+
+func mainE(ctx context.Context) error {
 	var metricsAddr string
 	var enableLeaderElection bool
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -52,7 +62,7 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+	//ctrl.SetLogger(zap.New(zap.UseDevMode(false)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
@@ -62,23 +72,26 @@ func main() {
 		LeaderElectionID:   "56d80c47.giantswarm.io",
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
+		return microerror.Mask(err)
+	}
+
+	log, err := micrologger.New(micrologger.Config{})
+	if err != nil {
+		return microerror.Mask(err)
 	}
 
 	if err = (&controllers.ClusterReconciler{
 		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Cluster"),
+		Log:    log,
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Cluster")
-		os.Exit(1)
+		return microerror.Mask(err)
 	}
 	// +kubebuilder:scaffold:builder
 
-	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
+		return microerror.Mask(err)
 	}
+
+	return nil
 }

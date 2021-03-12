@@ -18,9 +18,13 @@ package controllers
 
 import (
 	"context"
+	"strconv"
+	"sync/atomic"
+	"time"
 
 	"github.com/giantswarm/microerror"
-	"github.com/go-logr/logr"
+	"github.com/giantswarm/micrologger"
+	"github.com/giantswarm/micrologger/loggermeta"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,50 +35,64 @@ import (
 // ClusterReconciler reconciles a Cluster object
 type ClusterReconciler struct {
 	client.Client
-	Log    logr.Logger
+	Log    micrologger.Logger
 	Scheme *runtime.Scheme
+
+	loopSeq int64
 }
 
 // +kubebuilder:rbac:groups=cluster.x-k8s.io.giantswarm.io,resources=clusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cluster.x-k8s.io.giantswarm.io,resources=clusters/status,verbs=get;update;patch
 
 func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("cluster", req.NamespacedName)
-
 	cluster := &capiv1alpha3.Cluster{}
 	err := r.Get(ctx, req.NamespacedName, cluster)
 	if err != nil {
 		return ctrl.Result{}, microerror.Mask(err)
 	}
 
+	meta := loggermeta.New()
+	meta.KeyVals = map[string]string{
+		"controller": "cluster",
+		"object":     cluster.SelfLink,
+		"loop":       strconv.FormatInt(atomic.AddInt64(&r.loopSeq, 1), 10),
+	}
+	ctx = loggermeta.NewContext(ctx, meta)
+
 	// Based on https://github.com/kubernetes-sigs/cluster-api/blob/master/controllers/machine_controller.go.
-	if cluster.DeletionTimestamp.IsZero() {
-		res, err := r.reconcileDelete(ctx, log, cluster)
+	if !cluster.DeletionTimestamp.IsZero() {
+		res, err := r.reconcileDelete(ctx, cluster)
 		if err != nil {
-			return ctrl.Result{}, microerror.Mask(err)
+			requeueAfter := 30 * time.Second
+			r.Log.Errorf(ctx, err, "failed to reconcile, requeuing after %#q", requeueAfter)
+			return ctrl.Result{RequeueAfter: requeueAfter}, nil
 		}
 
 		return res, nil
 	}
 
-	res, err := r.reconcile(ctx, log, cluster)
+	res, err := r.reconcile(ctx, cluster)
 	if err != nil {
-		return ctrl.Result{}, microerror.Mask(err)
+		requeueAfter := 30 * time.Second
+		r.Log.Errorf(ctx, err, "failed to reconcile, requeuing after %#q", requeueAfter)
+		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
 	return res, nil
-}
-
-func (r *ClusterReconciler) reconcile(ctx context.Context, log logr.Logger, cluster *capiv1alpha3.Cluster) (ctrl.Result, error) {
-	return ctrl.Result{}, nil
-}
-
-func (r *ClusterReconciler) reconcileDelete(ctx context.Context, log logr.Logger, cluster *capiv1alpha3.Cluster) (ctrl.Result, error) {
-	return ctrl.Result{}, nil
 }
 
 func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&capiv1alpha3.Cluster{}).
 		Complete(r)
+}
+
+func (r *ClusterReconciler) reconcile(ctx context.Context, cluster *capiv1alpha3.Cluster) (ctrl.Result, error) {
+	r.Log.Debugf(ctx, "calling reconcile")
+	return ctrl.Result{}, nil
+}
+
+func (r *ClusterReconciler) reconcileDelete(ctx context.Context, cluster *capiv1alpha3.Cluster) (ctrl.Result, error) {
+	r.Log.Debugf(ctx, "calling reconcileDelete")
+	return ctrl.Result{}, nil
 }
