@@ -1,6 +1,5 @@
-
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= giantswarm/capi-migration:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
@@ -36,14 +35,19 @@ uninstall: manifests
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
 	cd config/manager && kustomize edit set image controller=${IMG}
-	kustomize build config/default | kubectl apply -f -
+	kustomize build config/dev | kubectl apply -f -
+
+# Undeploy controller in the configured Kubernetes cluster in ~/.kube/config
+undeploy: manifests
+	cd config/manager && kustomize edit set image controller=${IMG}
+	kustomize build config/dev | kubectl delete -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: CHART_TEMPLATE_FILE := $(shell ls -d helm/*)/templates/kustomize-out.yaml
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	mkdir -p $(shell dirname $(CHART_TEMPLATE_FILE))
-	kustomize build config/default -o '$(CHART_TEMPLATE_FILE)'
+	kustomize build config/helm -o '$(CHART_TEMPLATE_FILE)'
 
 
 # Run go fmt against code

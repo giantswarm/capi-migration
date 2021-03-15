@@ -1,9 +1,20 @@
 apiVersion: v1
-kind: Namespace
+kind: ConfigMap
 metadata:
+  name: controller-manager
+  namespace: system
   labels:
     control-plane: controller-manager
-  name: system
+data:
+  VAULT_ADDR: ""
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: controller-manager-vault-token
+  namespace: system
+  labels:
+    control-plane: controller-manager
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -22,6 +33,18 @@ spec:
       labels:
         control-plane: controller-manager
     spec:
+      initContainers:
+      - args:
+        - --vault-address=${VAULT_ADDR}
+        - --vault-role=$(NAME)
+        - --vault-token-secret-name=$(VAULT_TOKEN_SECRET_NAME)
+        - --vault-token-secret-namespace=$(NAMESPACE)
+        image: "giantswarm/k8s-jwt-to-vault-token:0.1.0"
+        imagePullPolicy: Always
+        name: ensure-vault-token
+        envFrom:
+        - configMapRef:
+            name: controller-manager
       containers:
       - command:
         - /manager
@@ -29,6 +52,15 @@ spec:
         - --enable-leader-election
         image: controller:latest
         name: manager
+        env:
+        - name: VAULT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: controller-manager-vault-token
+              key: token
+        envFrom:
+        - configMapRef:
+            name: controller-manager
         resources:
           limits:
             cpu: 100m

@@ -1,8 +1,6 @@
 apiVersion: v1
-name: capi-migration-controller
-description: capi-migration-controller chart.
-home: https://github.com/giantswarm/capi-migration-controller
+name: capi-migration
+description: capi-migration chart.
+home: https://github.com/giantswarm/capi-migration
 version: [[ .Version ]]
 appVersion: [[ .AppVersion ]]
-annotations:
-  config.giantswarm.io/version: 1.x.x

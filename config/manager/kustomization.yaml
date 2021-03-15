@@ -1,8 +1,31 @@
-resources:
-- manager.yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
+resources:
+- manager.yaml
+
 images:
-- name: controller
-  newName: controller
-  newTag: latest
+- name: ensure-vault-token
+  newName: giantswarm/k8s-jwt-to-vault-token
+  newTag: 0.1.0
+
+vars:
+- fieldref: {}
+  name: NAME
+  objref:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: controller-manager
+- fieldref:
+    fieldPath: metadata.namespace
+  name: NAMESPACE
+  objref:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: controller-manager
+- fieldref: {}
+  name: VAULT_TOKEN_SECRET_NAME
+  objref:
+    apiVersion: v1
+    kind: Secret
+    name: controller-manager-vault-token

@@ -20,18 +20,23 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
+	"github.com/giantswarm/microerror"
+	"github.com/giantswarm/micrologger"
+	vaultapi "github.com/hashicorp/vault/api"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/giantswarm/capi-migration-controller/controllers"
-	"github.com/giantswarm/microerror"
-	"github.com/giantswarm/micrologger"
 	capiv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	// +kubebuilder:scaffold:imports
+
+	"github.com/giantswarm/capi-migration/controllers"
 )
 
 var (
@@ -45,7 +50,37 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 }
 
+var flags = struct {
+	enableLeaderElection bool
+	metricsAddr          string
+	vaultAddr            string
+	vaultToken           string
+}{}
+
+func initFlags() {
+	flag.BoolVar(&flags.enableLeaderElection, "enable-leader-election", false, "Enable leader election for controller manager.")
+	flag.StringVar(&flags.vaultAddr, "vault-addr", os.Getenv("VAULT_ADDR"), "The address of the vault to connect to. Defaults to VAULT_ADDR.")
+	flag.StringVar(&flags.vaultToken, "vault-token", os.Getenv("VAULT_TOKEN"), "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
+	flag.StringVar(&flags.metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	flag.Parse()
+
+	var errors []string
+
+	if flags.vaultAddr == "" {
+		errors = append(errors, "--vault-addr flag or VAULT_ADDR environment variable must be set")
+	}
+	if flags.vaultToken == "" {
+		errors = append(errors, "--vault-token flag or VAULT_TOKEN environment variable must be set")
+	}
+
+	if len(errors) > 1 {
+		fmt.Fprintf(os.Stderr, "%s\n", strings.Join(errors, "\n"))
+		os.Exit(2)
+	}
+}
+
 func main() {
+	initFlags()
 	err := mainE(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", microerror.Pretty(err, true))
@@ -54,21 +89,13 @@ func main() {
 }
 
 func mainE(ctx context.Context) error {
-	var metricsAddr string
-	var enableLeaderElection bool
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
-	flag.Parse()
-
-	//ctrl.SetLogger(zap.New(zap.UseDevMode(false)))
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
+		MetricsBindAddress: flags.metricsAddr,
 		Port:               9443,
-		LeaderElection:     enableLeaderElection,
+		LeaderElection:     flags.enableLeaderElection,
 		LeaderElectionID:   "56d80c47.giantswarm.io",
 	})
 	if err != nil {
@@ -78,6 +105,34 @@ func mainE(ctx context.Context) error {
 	log, err := micrologger.New(micrologger.Config{})
 	if err != nil {
 		return microerror.Mask(err)
+	}
+
+	var vaultClient *vaultapi.Client
+	{
+		c := vaultapi.DefaultConfig()
+		c.Address = flags.vaultAddr
+		vaultClient, err = vaultapi.NewClient(c)
+		if err != nil {
+			return nil
+		}
+		vaultClient.SetToken(flags.vaultToken)
+	}
+
+	// TODO delete this code. It's used only to check vault connectivity.
+	{
+		req := vaultClient.NewRequest("GET", "/v1/sys/mounts")
+		resp, err := vaultClient.RawRequestWithContext(ctx, req)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+
+		bytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+		fmt.Printf("############ vault response:\n%s\n############\n", bytes)
+
+		resp.Body.Close()
 	}
 
 	if err = (&controllers.ClusterReconciler{

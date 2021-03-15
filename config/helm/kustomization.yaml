@@ -1,0 +1,14 @@
+images:
+- name: controller
+  newName: "{{ .Values.Installation.V1.Registry.Domain }}/{{ .Values.image.name }}"
+  newTag: "{{ .Values.image.tag }}"
+
+bases:
+  - ../default
+
+configMapGenerator:
+- name: controller-manager
+  namespace: system
+  behavior: replace
+  files:
+  - config.yaml

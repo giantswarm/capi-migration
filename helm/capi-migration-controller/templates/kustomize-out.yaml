@@ -1,15 +1,10 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  labels:
-    control-plane: controller-manager
-  name: capi-migration-controller-system
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: capi-migration-controller-leader-election-role
-  namespace: capi-migration-controller-system
+  labels:
+    app.kubernetes.io/name: capi-migration
+  name: capi-migration-leader-election-role
+  namespace: giantswarm
 rules:
 - apiGroups:
   - ""
@@ -42,7 +37,9 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: capi-migration-controller-manager-role
+  labels:
+    app.kubernetes.io/name: capi-migration
+  name: capi-migration-manager-role
 rules:
 - apiGroups:
   - cluster.x-k8s.io.giantswarm.io
@@ -96,29 +93,54 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: capi-migration-controller-leader-election-rolebinding
-  namespace: capi-migration-controller-system
+  labels:
+    app.kubernetes.io/name: capi-migration
+  name: capi-migration-leader-election-rolebinding
+  namespace: giantswarm
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: capi-migration-controller-leader-election-role
+  name: capi-migration-leader-election-role
 subjects:
 - kind: ServiceAccount
   name: default
-  namespace: capi-migration-controller-system
+  namespace: giantswarm
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: capi-migration-controller-manager-rolebinding
+  labels:
+    app.kubernetes.io/name: capi-migration
+  name: capi-migration-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: capi-migration-controller-manager-role
+  name: capi-migration-manager-role
 subjects:
 - kind: ServiceAccount
   name: default
-  namespace: capi-migration-controller-system
+  namespace: giantswarm
+---
+apiVersion: v1
+data:
+  config.yaml: |
+    vaultAddress: "{{ .Values.Installation.V1.Auth.Vault.Address }}"
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/name: capi-migration
+    control-plane: controller-manager
+  name: capi-migration-controller-manager
+  namespace: giantswarm
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app.kubernetes.io/name: capi-migration
+    control-plane: controller-manager
+  name: capi-migration-controller-manager-vault-token
+  namespace: giantswarm
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -137,51 +159,54 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
+    app.kubernetes.io/name: capi-migration
     control-plane: controller-manager
-  name: capi-migration-controller-controller-manager-metrics-service
-  namespace: capi-migration-controller-system
+  name: capi-migration-controller-manager-metrics-service
+  namespace: giantswarm
 spec:
   ports:
   - name: https
     port: 8443
     targetPort: https
   selector:
+    app.kubernetes.io/name: capi-migration
     control-plane: controller-manager
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
+    app.kubernetes.io/name: capi-migration
     control-plane: controller-manager
-  name: capi-migration-controller-controller-manager
-  namespace: capi-migration-controller-system
+  name: capi-migration-controller-manager
+  namespace: giantswarm
 spec:
   replicas: 1
   selector:
     matchLabels:
+      app.kubernetes.io/name: capi-migration
       control-plane: controller-manager
   template:
     metadata:
       labels:
+        app.kubernetes.io/name: capi-migration
         control-plane: controller-manager
     spec:
       containers:
       - args:
-        - --secure-listen-address=0.0.0.0:8443
-        - --upstream=http://127.0.0.1:8080/
-        - --logtostderr=true
-        - --v=10
-        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0
-        name: kube-rbac-proxy
-        ports:
-        - containerPort: 8443
-          name: https
-      - args:
-        - --metrics-addr=127.0.0.1:8080
         - --enable-leader-election
         command:
         - /manager
-        image: controller:latest
+        env:
+        - name: VAULT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: token
+              name: capi-migration-controller-manager-vault-token
+        envFrom:
+        - configMapRef:
+            name: capi-migration-controller-manager
+        image: '{{ .Values.Installation.V1.Registry.Domain }}/{{ .Values.image.name }}:{{ .Values.image.tag }}'
         name: manager
         resources:
           limits:
@@ -190,4 +215,16 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
+      initContainers:
+      - args:
+        - --vault-address=${VAULT_ADDR}
+        - --vault-role=capi-migration-controller-manager
+        - --vault-token-secret-name=capi-migration-controller-manager-vault-token
+        - --vault-token-secret-namespace=giantswarm
+        envFrom:
+        - configMapRef:
+            name: capi-migration-controller-manager
+        image: giantswarm/k8s-jwt-to-vault-token:0.1.0
+        imagePullPolicy: Always
+        name: ensure-vault-token
       terminationGracePeriodSeconds: 10
