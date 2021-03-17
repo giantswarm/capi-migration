@@ -32,7 +32,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	"github.com/giantswarm/capi-migration/controllers"
+	"github.com/giantswarm/microerror"
+	"github.com/giantswarm/micrologger"
 	capiv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
+
 	// +kubebuilder:scaffold:imports
 
 	"github.com/giantswarm/capi-migration/controllers"
@@ -100,7 +104,7 @@ func mainE(ctx context.Context) error {
 		MetricsBindAddress: flags.MetricsAddr,
 		Port:               9443,
 		LeaderElection:     flags.EnableLeaderElection,
-		LeaderElectionID:   "56d80c47.giantswarm.io",
+		LeaderElectionID:   "2db8ae24.giantswarm.io",
 	})
 	if err != nil {
 		return microerror.Mask(err)
@@ -122,7 +126,6 @@ func mainE(ctx context.Context) error {
 			return microerror.Mask(err)
 		}
 	}
-
 	if err = (&controllers.ClusterReconciler{
 		Client:      mgr.GetClient(),
 		Log:         log,
@@ -133,6 +136,7 @@ func mainE(ctx context.Context) error {
 	}
 	// +kubebuilder:scaffold:builder
 
+	log.Debugf(ctx, "Starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		return microerror.Mask(err)
 	}
