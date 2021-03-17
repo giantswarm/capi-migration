@@ -18,8 +18,11 @@ package controllers
 
 import (
 	"context"
+	"strconv"
+	"sync/atomic"
 
-	"github.com/go-logr/logr"
+	"github.com/giantswarm/micrologger"
+	"github.com/giantswarm/micrologger/loggermeta"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,15 +33,23 @@ import (
 // ClusterReconciler reconciles a Cluster object
 type ClusterReconciler struct {
 	client.Client
-	Log    logr.Logger
+	Log    micrologger.Logger
 	Scheme *runtime.Scheme
+
+	loopSeq int64
 }
 
 // +kubebuilder:rbac:groups=cluster.x-k8s.io.giantswarm.io,resources=clusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cluster.x-k8s.io.giantswarm.io,resources=clusters/status,verbs=get;update;patch
 
 func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = r.Log.WithValues("cluster", req.NamespacedName)
+	meta := loggermeta.New()
+	meta.KeyVals = map[string]string{
+		"controller": "cluster",
+		"object":     req.NamespacedName.String(),
+		"loop":       strconv.FormatInt(atomic.AddInt64(&r.loopSeq, 1), 10),
+	}
+	ctx = loggermeta.NewContext(ctx, meta)
 
 	// your logic here
 

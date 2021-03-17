@@ -17,8 +17,11 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"os"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -27,13 +30,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/giantswarm/capi-migration/controllers"
+	"github.com/giantswarm/microerror"
+	"github.com/giantswarm/micrologger"
 	capiv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	// +kubebuilder:scaffold:imports
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme = runtime.NewScheme()
 )
 
 func init() {
@@ -43,42 +47,71 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 }
 
-func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
+var flags = struct {
+	EnableLeaderElection bool
+	MetricsAddr          string
+}{}
+
+func initFlags() {
+	flag.BoolVar(&flags.EnableLeaderElection, "enable-leader-election", false, "Enable leader election for controller manager.")
+	flag.StringVar(&flags.MetricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.Parse()
 
+	var errors []string
+
+	// Flag validation goes here.
+	//
+	//if flags.MyFlag == "" {
+	//	errors = append(errors, "--my-flag must be not empty")
+	//}
+
+	if len(errors) > 1 {
+		fmt.Fprintf(os.Stderr, "%s\n", strings.Join(errors, "\n"))
+		os.Exit(2)
+	}
+}
+
+func main() {
+	initFlags()
+	err := mainE(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", microerror.Pretty(err, true))
+		os.Exit(1)
+	}
+}
+
+func mainE(ctx context.Context) error {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+
+	log, err := micrologger.New(micrologger.Config{})
+	if err != nil {
+		return microerror.Mask(err)
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
+		MetricsBindAddress: flags.MetricsAddr,
 		Port:               9443,
-		LeaderElection:     enableLeaderElection,
+		LeaderElection:     flags.EnableLeaderElection,
 		LeaderElectionID:   "2db8ae24.giantswarm.io",
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
+		return microerror.Mask(err)
 	}
 
 	if err = (&controllers.ClusterReconciler{
 		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Cluster"),
+		Log:    log,
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Cluster")
-		os.Exit(1)
+		return microerror.Mask(err)
 	}
 	// +kubebuilder:scaffold:builder
 
-	setupLog.Info("starting manager")
+	log.Debugf(ctx, "Starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
+		return microerror.Mask(err)
 	}
+
+	return nil
 }
