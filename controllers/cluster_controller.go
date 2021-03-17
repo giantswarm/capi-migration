@@ -20,7 +20,9 @@ import (
 	"context"
 	"strconv"
 	"sync/atomic"
+	"time"
 
+	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
 	"github.com/giantswarm/micrologger/loggermeta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -51,13 +53,46 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 	ctx = loggermeta.NewContext(ctx, meta)
 
-	// your logic here
+	cluster := &capiv1alpha3.Cluster{}
+	err := r.Get(ctx, req.NamespacedName, cluster)
+	if err != nil {
+		return ctrl.Result{}, microerror.Mask(err)
+	}
 
-	return ctrl.Result{}, nil
+	// Based on https://github.com/kubernetes-sigs/cluster-api/blob/master/controllers/machine_controller.go.
+	if !cluster.DeletionTimestamp.IsZero() {
+		res, err := r.reconcileDelete(ctx, cluster)
+		if err != nil {
+			requeueAfter := 30 * time.Second
+			r.Log.Errorf(ctx, err, "failed to reconcile, requeuing after %#q", requeueAfter)
+			return ctrl.Result{RequeueAfter: requeueAfter}, nil
+		}
+
+		return res, nil
+	}
+
+	res, err := r.reconcile(ctx, cluster)
+	if err != nil {
+		requeueAfter := 30 * time.Second
+		r.Log.Errorf(ctx, err, "failed to reconcile, requeuing after %#q", requeueAfter)
+		return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	}
+
+	return res, nil
 }
 
 func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&capiv1alpha3.Cluster{}).
 		Complete(r)
+}
+
+func (r *ClusterReconciler) reconcile(ctx context.Context, cluster *capiv1alpha3.Cluster) (ctrl.Result, error) {
+	r.Log.Debugf(ctx, "calling reconcile")
+	return ctrl.Result{}, nil
+}
+
+func (r *ClusterReconciler) reconcileDelete(ctx context.Context, cluster *capiv1alpha3.Cluster) (ctrl.Result, error) {
+	r.Log.Debugf(ctx, "calling reconcileDelete")
+	return ctrl.Result{}, nil
 }
