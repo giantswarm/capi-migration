@@ -7,6 +7,39 @@ metadata:
   name: capi-migration-controller-manager
   namespace: giantswarm
 ---
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  labels:
+    app.kubernetes.io/name: capi-migration
+  name: capi-migration-controller-manager-psp
+spec:
+  allowPrivilegeEscalation: false
+  fsGroup:
+    ranges:
+    - max: 65535
+      min: 1
+    rule: MustRunAs
+  hostIPC: false
+  hostNetwork: false
+  hostPID: false
+  privileged: false
+  runAsGroup:
+    ranges:
+    - max: 65535
+      min: 1
+    rule: MustRunAs
+  runAsUser:
+    rule: MustRunAsNonRoot
+  seLinux:
+    rule: RunAsAny
+  supplementalGroups:
+    rule: RunAsAny
+  volumes:
+  - secret
+  - configMap
+  - hostPath
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -45,11 +78,39 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  labels:
+    app.kubernetes.io/name: capi-migration
+  name: capi-migration-controller-manager-psp
+rules:
+- apiGroups:
+  - extensions
+  resourceNames:
+  - capi-migration-controller-manager-psp
+  resources:
+  - podsecuritypolicies
+  verbs:
+  - use
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
   creationTimestamp: null
   labels:
     app.kubernetes.io/name: capi-migration
   name: capi-migration-manager-role
 rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - cluster.x-k8s.io.giantswarm.io
   resources:
@@ -82,6 +143,21 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: capi-migration-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: capi-migration-controller-manager
+  namespace: giantswarm
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: capi-migration
+  name: capi-migration-controller-manager-psp
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: capi-migration-controller-manager-psp
 subjects:
 - kind: ServiceAccount
   name: capi-migration-controller-manager
@@ -174,7 +250,7 @@ spec:
         envFrom:
         - configMapRef:
             name: capi-migration-controller-manager
-        image: '{{ .Values.Installation.V1.Registry.Domain }}/{{ .Values.image.name }}:{{ .Values.image.tag }}'
+        image: giantswarm/capi-migration:latest
         name: manager
         resources:
           limits:
@@ -183,10 +259,13 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
+        volumeMounts:
+        - mountPath: /etc/ssl/certs/
+          name: ssl-certs
       initContainers:
       - args:
-        - --vault-address=${VAULT_ADDR}
-        - --vault-role=capi-migration-controller-manager
+        - --vault-address=$(VAULT_ADDR)
+        - --vault-role=$(ENSURE_VAULT_TOKEN_VAULT_ROLE)
         - --vault-token-secret-name=capi-migration-controller-manager-vault-token
         - --vault-token-secret-namespace=giantswarm
         envFrom:
@@ -195,5 +274,12 @@ spec:
         image: giantswarm/k8s-jwt-to-vault-token:0.1.0
         imagePullPolicy: Always
         name: ensure-vault-token
+      securityContext:
+        runAsGroup: 1000
+        runAsUser: 1000
       serviceAccountName: capi-migration-controller-manager
       terminationGracePeriodSeconds: 10
+      volumes:
+      - hostPath:
+          path: /etc/ssl/certs/
+        name: ssl-certs

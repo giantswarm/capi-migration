@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 
@@ -88,6 +87,40 @@ func main() {
 	}
 }
 
+type VaultClient struct {
+	client *vaultapi.Client
+}
+
+func NewVaultClient(client *vaultapi.Client) *VaultClient {
+	return &VaultClient{
+		client: client,
+	}
+}
+
+func (v *VaultClient) Request(ctx context.Context, method, endpoint string, req, resp interface{}) error {
+	httpReq := v.client.NewRequest(method, endpoint)
+	err := httpReq.SetJSONBody(req)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	httpResp, err := v.client.RawRequest(httpReq)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	if httpResp.StatusCode != 200 {
+		return microerror.Mask(fmt.Errorf("expected status code = 200, got %d", httpResp.StatusCode))
+	}
+
+	err = httpResp.DecodeJSON(resp)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	return nil
+}
+
 func mainE(ctx context.Context) error {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
@@ -116,29 +149,19 @@ func mainE(ctx context.Context) error {
 			return nil
 		}
 		vaultClient.SetToken(flags.vaultToken)
-	}
 
-	// TODO delete this code. It's used only to check vault connectivity.
-	{
-		req := vaultClient.NewRequest("GET", "/v1/sys/mounts")
-		resp, err := vaultClient.RawRequestWithContext(ctx, req)
+		// Check vault connectivity.
+		_, err := vaultClient.Auth().Token().LookupSelf()
 		if err != nil {
 			return microerror.Mask(err)
 		}
-
-		bytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return microerror.Mask(err)
-		}
-		fmt.Printf("############ vault response:\n%s\n############\n", bytes)
-
-		resp.Body.Close()
 	}
 
 	if err = (&controllers.ClusterReconciler{
-		Client: mgr.GetClient(),
-		Log:    log,
-		Scheme: mgr.GetScheme(),
+		Client:      mgr.GetClient(),
+		Log:         log,
+		VaultClient: vaultClient,
+		Scheme:      mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		return microerror.Mask(err)
 	}

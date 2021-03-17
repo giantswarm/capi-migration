@@ -7,6 +7,7 @@ metadata:
     control-plane: controller-manager
 data:
   VAULT_ADDR: ""
+  ENSURE_VAULT_TOKEN_VAULT_ROLE: "capi-migration"
 ---
 apiVersion: v1
 kind: Secret
@@ -33,13 +34,20 @@ spec:
       labels:
         control-plane: controller-manager
     spec:
+      volumes:
+      - name: ssl-certs
+        hostPath:
+          path: /etc/ssl/certs/
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
       initContainers:
       - args:
-        - --vault-address=${VAULT_ADDR}
-        - --vault-role=$(NAME)
+        - --vault-address=$(VAULT_ADDR)
+        - --vault-role=$(ENSURE_VAULT_TOKEN_VAULT_ROLE)
         - --vault-token-secret-name=$(VAULT_TOKEN_SECRET_NAME)
         - --vault-token-secret-namespace=$(NAMESPACE)
-        image: "giantswarm/k8s-jwt-to-vault-token:0.1.0"
+        image: "ensure-vault-token:latest"
         imagePullPolicy: Always
         name: ensure-vault-token
         envFrom:
@@ -68,5 +76,8 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
+        volumeMounts:
+        - name: ssl-certs
+          mountPath: /etc/ssl/certs/
       terminationGracePeriodSeconds: 10
       serviceAccountName: controller-manager
