@@ -3,7 +3,6 @@ kind: Kustomization
 
 resources:
 - manager.yaml
-- service_account.yaml
 
 images:
 - name: controller
