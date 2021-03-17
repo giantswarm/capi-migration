@@ -47,19 +47,19 @@ type ClusterReconciler struct {
 // +kubebuilder:rbac:groups=cluster.x-k8s.io.giantswarm.io,resources=clusters/status,verbs=get;update;patch
 
 func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	meta := loggermeta.New()
+	meta.KeyVals = map[string]string{
+		"controller": "cluster",
+		"object":     req.NamespacedName.String(),
+		"loop":       strconv.FormatInt(atomic.AddInt64(&r.loopSeq, 1), 10),
+	}
+	ctx = loggermeta.NewContext(ctx, meta)
+
 	cluster := &capiv1alpha3.Cluster{}
 	err := r.Get(ctx, req.NamespacedName, cluster)
 	if err != nil {
 		return ctrl.Result{}, microerror.Mask(err)
 	}
-
-	meta := loggermeta.New()
-	meta.KeyVals = map[string]string{
-		"controller": "cluster",
-		"object":     cluster.SelfLink,
-		"loop":       strconv.FormatInt(atomic.AddInt64(&r.loopSeq, 1), 10),
-	}
-	ctx = loggermeta.NewContext(ctx, meta)
 
 	// Based on https://github.com/kubernetes-sigs/cluster-api/blob/master/controllers/machine_controller.go.
 	if !cluster.DeletionTimestamp.IsZero() {

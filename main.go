@@ -50,25 +50,25 @@ func init() {
 }
 
 var flags = struct {
-	enableLeaderElection bool
-	metricsAddr          string
-	vaultAddr            string
-	vaultToken           string
+	EnableLeaderElection bool
+	MetricsAddr          string
+	VaultAddr            string
+	VaultToken           string
 }{}
 
 func initFlags() {
-	flag.BoolVar(&flags.enableLeaderElection, "enable-leader-election", false, "Enable leader election for controller manager.")
-	flag.StringVar(&flags.vaultAddr, "vault-addr", os.Getenv("VAULT_ADDR"), "The address of the vault to connect to. Defaults to VAULT_ADDR.")
-	flag.StringVar(&flags.vaultToken, "vault-token", os.Getenv("VAULT_TOKEN"), "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
-	flag.StringVar(&flags.metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	flag.BoolVar(&flags.EnableLeaderElection, "enable-leader-election", false, "Enable leader election for controller manager.")
+	flag.StringVar(&flags.VaultAddr, "vault-addr", os.Getenv("VAULT_ADDR"), "The address of the vault to connect to. Defaults to VAULT_ADDR.")
+	flag.StringVar(&flags.VaultToken, "vault-token", os.Getenv("VAULT_TOKEN"), "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
+	flag.StringVar(&flags.MetricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.Parse()
 
 	var errors []string
 
-	if flags.vaultAddr == "" {
+	if flags.VaultAddr == "" {
 		errors = append(errors, "--vault-addr flag or VAULT_ADDR environment variable must be set")
 	}
-	if flags.vaultToken == "" {
+	if flags.VaultToken == "" {
 		errors = append(errors, "--vault-token flag or VAULT_TOKEN environment variable must be set")
 	}
 
@@ -83,59 +83,25 @@ func main() {
 	err := mainE(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", microerror.Pretty(err, true))
-		os.Exit(2)
+		os.Exit(1)
 	}
-}
-
-type VaultClient struct {
-	client *vaultapi.Client
-}
-
-func NewVaultClient(client *vaultapi.Client) *VaultClient {
-	return &VaultClient{
-		client: client,
-	}
-}
-
-func (v *VaultClient) Request(ctx context.Context, method, endpoint string, req, resp interface{}) error {
-	httpReq := v.client.NewRequest(method, endpoint)
-	err := httpReq.SetJSONBody(req)
-	if err != nil {
-		return microerror.Mask(err)
-	}
-
-	httpResp, err := v.client.RawRequest(httpReq)
-	if err != nil {
-		return microerror.Mask(err)
-	}
-
-	if httpResp.StatusCode != 200 {
-		return microerror.Mask(fmt.Errorf("expected status code = 200, got %d", httpResp.StatusCode))
-	}
-
-	err = httpResp.DecodeJSON(resp)
-	if err != nil {
-		return microerror.Mask(err)
-	}
-
-	return nil
 }
 
 func mainE(ctx context.Context) error {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: flags.metricsAddr,
-		Port:               9443,
-		LeaderElection:     flags.enableLeaderElection,
-		LeaderElectionID:   "56d80c47.giantswarm.io",
-	})
+	log, err := micrologger.New(micrologger.Config{})
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	log, err := micrologger.New(micrologger.Config{})
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:             scheme,
+		MetricsBindAddress: flags.MetricsAddr,
+		Port:               9443,
+		LeaderElection:     flags.EnableLeaderElection,
+		LeaderElectionID:   "56d80c47.giantswarm.io",
+	})
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -143,12 +109,12 @@ func mainE(ctx context.Context) error {
 	var vaultClient *vaultapi.Client
 	{
 		c := vaultapi.DefaultConfig()
-		c.Address = flags.vaultAddr
+		c.Address = flags.VaultAddr
 		vaultClient, err = vaultapi.NewClient(c)
 		if err != nil {
 			return nil
 		}
-		vaultClient.SetToken(flags.vaultToken)
+		vaultClient.SetToken(flags.VaultToken)
 
 		// Check vault connectivity.
 		_, err := vaultClient.Auth().Token().LookupSelf()

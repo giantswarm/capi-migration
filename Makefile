@@ -49,7 +49,6 @@ manifests: controller-gen
 	mkdir -p $(shell dirname $(CHART_TEMPLATE_FILE))
 	kustomize build config/helm -o '$(CHART_TEMPLATE_FILE)'
 
-
 # Run go fmt against code
 fmt:
 	go fmt ./...
@@ -64,6 +63,7 @@ generate: controller-gen
 
 # Build the docker image
 docker-build: test
+	mkdir -p api controllers
 	docker build . -t ${IMG}
 
 # Push the docker image
