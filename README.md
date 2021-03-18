@@ -22,7 +22,7 @@
  * Remove the old CA from the etcd bundle
  * Roll the masters again
 
-Errors still to be solved:
+### Errors still to be solved
 
  * externalDNS crashes
 worker nodes still have useManagedIdentity set to false despite the AzureMachineTemplate having it set to SystemAssigned  (this is likely the cause for external-dns crash listed above)
