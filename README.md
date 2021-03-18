@@ -27,4 +27,4 @@
  * externalDNS crashes
 worker nodes still have useManagedIdentity set to false despite the AzureMachineTemplate having it set to SystemAssigned  (this is likely the cause for external-dns crash listed above)
  * PVC are not being provisioned
- * Load balancer has issues
+ * Load balancer has issues (might be related to https://github.com/kubernetes-sigs/cloud-provider-azure/issues/363)
