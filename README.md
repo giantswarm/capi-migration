@@ -1,4 +1,4 @@
-# capi-migration-controller
+# capi-migration
 
 ## Migration process outline
 
