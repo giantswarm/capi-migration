@@ -1,6 +1,8 @@
 package migration
 
 import (
+	"fmt"
+
 	"github.com/giantswarm/microerror"
 )
 
@@ -36,6 +38,10 @@ func (m *azureMigrator) IsMigrated() (bool, error) {
 	return true, nil
 }
 
+func (m *azureMigrator) IsMigrating() (bool, error) {
+	return false, nil
+}
+
 func (m *azureMigrator) Prepare() error {
 	var err error
 
@@ -61,6 +67,14 @@ func (m *azureMigrator) TriggerMigration() error {
 	err := m.triggerMigration()
 	if err != nil {
 		return microerror.Mask(err)
+	}
+
+	return nil
+}
+
+func (m *azureMigrator) Cleanup() error {
+	if !m.IsMigrated() {
+		return fmt.Errorf("cluster has not migrated yet")
 	}
 
 	return nil

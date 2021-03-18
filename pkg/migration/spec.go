@@ -8,9 +8,16 @@ type MigratorFactory interface {
 }
 
 type Migrator interface {
+	// Cleanup performs cleanup operations after migration has been completed.
+	Cleanup() error
+
 	// IsMigrated performs check to see if given cluster has been already
 	// migrated.
 	IsMigrated() (bool, error)
+
+	// IsMigrating performs check to see if given cluster has migration
+	// triggered already.
+	IsMigrating() (bool, error)
 
 	// Prepare executes preparatory migration actions such as transforming
 	// existing CRs into upstream compatible format and creating missing CRs.
