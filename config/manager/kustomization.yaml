@@ -5,9 +5,6 @@ resources:
 - manager.yaml
 
 images:
-- name: controller
-  newName: giantswarm/capi-migration
-  newTag: latest
 - name: ensure-vault-token
   newName: giantswarm/k8s-jwt-to-vault-token
   newTag: 0.1.0
