@@ -2,6 +2,11 @@
 // flavor to upstream compatible CAPI.
 package migration
 
+type MigratorFactory interface {
+	// Construct new Migrator for given cluster.
+	NewMigrator(clusterID string) (Migrator, error)
+}
+
 type Migrator interface {
 	// IsMigrated performs check to see if given cluster has been already
 	// migrated.

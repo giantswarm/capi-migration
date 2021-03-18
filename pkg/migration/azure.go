@@ -8,13 +8,28 @@ type AzureMigrationConfig struct {
 	// Migration configuration + dependencies such as k8s client.
 }
 
+type azureMigratorFactory struct {
+	config AzureMigrationConfig
+}
+
 type azureMigrator struct {
+	clusterID string
+
 	// Migration configuration, dependencies + intermediate cache for involved
 	// CRs.
 }
 
-func NewAzureMigrator(cfg AzureMigrationConfig) (Migrator, error) {
-	return &azureMigrator{}, nil
+func NewAzureMigratorFactory(cfg AzureMigrationConfig) (MigratorFactory, error) {
+	return &azureMigratorFactory{
+		config: cfg,
+	}, nil
+}
+
+func (f *azureMigratorFactory) NewMigrator(clusterID string) (Migrator, error) {
+	return &azureMigrator{
+		clusterID: clusterID,
+		// rest of the config from f.config...
+	}, nil
 }
 
 func (m *azureMigrator) IsMigrated() (bool, error) {
