@@ -17,6 +17,10 @@ func NewAzureMigrator(cfg AzureMigrationConfig) (Migrator, error) {
 	return &azureMigrator{}, nil
 }
 
+func (m *azureMigrator) IsMigrated() (bool, error) {
+	return true, nil
+}
+
 func (m *azureMigrator) Prepare() error {
 	var err error
 
