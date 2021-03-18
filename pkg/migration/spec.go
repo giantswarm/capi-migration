@@ -11,7 +11,7 @@ type Migrator interface {
 	// existing CRs into upstream compatible format and creating missing CRs.
 	Prepare() error
 
-	// Migrate performs final execution which shifts reconciliation to upstream
-	// controllers.
-	Migrate() error
+	// TriggerMigration performs final execution which shifts reconciliation to
+	// upstream controllers.
+	TriggerMigration() error
 }

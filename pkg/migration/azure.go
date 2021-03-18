@@ -42,7 +42,7 @@ func (m *azureMigrator) Prepare() error {
 	return nil
 }
 
-func (m *azureMigrator) Migrate() error {
+func (m *azureMigrator) TriggerMigration() error {
 	err := m.triggerMigration()
 	if err != nil {
 		return microerror.Mask(err)
