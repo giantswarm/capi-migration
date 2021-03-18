@@ -19,7 +19,7 @@
 
 ### Cleanup Phase
 
- * Remove the old CA fromt the etcd bundle
+ * Remove the old CA from the etcd bundle
  * Roll the masters again
 
 Errors still to be solved:
