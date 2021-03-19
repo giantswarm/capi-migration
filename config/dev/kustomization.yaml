@@ -6,7 +6,7 @@ images:
   newTag: latest
 
 bases:
-  - ../default
+- ../default
 
 resources:
-  - namespace.yaml
+- namespace.yaml
