@@ -1,0 +1,12 @@
+namespace: capi-migration-system-dev
+
+images:
+- name: controller
+  newName: giantswarm/capi-migration
+  newTag: latest
+
+bases:
+- ../default
+
+resources:
+- namespace.yaml
