@@ -7,11 +7,12 @@
  * Create a new root CA for etcd and add it to the management cluster as a secret (according to CABPK conventions)
  * Roll the existing masters with a CA bundle of the old and new CA
  * Export the root (cert and key) from vault and store it in a secret on the management cluster
+ * Disable the old controller-managers (new nodes will not be able to join otherwise)
 
 ### Migration Phase
 
  * Migrate the CRs
- * Once the CRs are ready hand them over to the CAPI controllers
+ * Once the CRs are ready - hand them over to the CAPI controllers
  * New nodes will be created
  * Drain and remove the old master once the new one is there
  * Edit the coredns deployment to fix the volume definition (not sure why it's broken)
