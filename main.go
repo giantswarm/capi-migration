@@ -61,10 +61,10 @@ var flags = struct {
 }{}
 
 func initFlags() {
-	flag.BoolVar(&flags.EnableLeaderElection, "enable-leader-election", false, "Enable leader election for controller manager.")
+	flag.BoolVar(&flags.EnableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
 	flag.StringVar(&flags.VaultAddr, "vault-addr", os.Getenv("VAULT_ADDR"), "The address of the vault to connect to. Defaults to VAULT_ADDR.")
 	flag.StringVar(&flags.VaultToken, "vault-token", os.Getenv("VAULT_TOKEN"), "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
-	flag.StringVar(&flags.MetricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&flags.MetricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.Parse()
 
 	var errors []string

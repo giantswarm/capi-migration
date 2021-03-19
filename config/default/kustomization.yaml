@@ -10,7 +10,7 @@ namePrefix: capi-migration-
 
 # Labels to add to all resources and selectors.
 commonLabels:
-  app.kubernetes.io/name:  capi-migration
+  app.kubernetes.io/name: capi-migration
 
 bases:
 #- ../crd
