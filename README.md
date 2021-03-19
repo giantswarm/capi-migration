@@ -1,3 +1,5 @@
+![CI](https://github.com/giantswarm/capi-migration/actions/workflows/ci.yaml/badge.svg)
+
 # capi-migration
 
 ## Migration process outline
