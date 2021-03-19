@@ -5,6 +5,8 @@ images:
   newName: giantswarm/capi-migration
   newTag: latest
 
+bases:
+- ../default
+
 resources:
 - namespace.yaml
-- ../default
