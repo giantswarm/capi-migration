@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"fmt"
 
 	provider "github.com/giantswarm/apiextensions/v3/pkg/apis/provider/v1alpha1"
 	"github.com/giantswarm/microerror"
@@ -10,8 +11,6 @@ import (
 	capi "sigs.k8s.io/cluster-api/api/v1alpha3"
 	capiexp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/giantswarm/capi-migration/pkg/errors"
 )
 
 func (m *azureMigrator) readAzureConfig(ctx context.Context) error {
@@ -23,7 +22,7 @@ func (m *azureMigrator) readAzureConfig(ctx context.Context) error {
 	}
 
 	if len(objList.Items) == 0 {
-		return microerror.Maskf(errors.NotFound, "AzureConfig for %q", m.clusterID)
+		return microerror.Mask(fmt.Errorf("AzureConfig not found for %q", m.clusterID))
 	}
 
 	obj := objList.Items[0]
@@ -41,7 +40,7 @@ func (m *azureMigrator) readCluster(ctx context.Context) error {
 	}
 
 	if len(objList.Items) == 0 {
-		return microerror.Maskf(errors.NotFound, "Cluster for %q", m.clusterID)
+		return microerror.Mask(fmt.Errorf("Cluster not found for %q", m.clusterID))
 	}
 
 	obj := objList.Items[0]
@@ -59,7 +58,7 @@ func (m *azureMigrator) readAzureCluster(ctx context.Context) error {
 	}
 
 	if len(objList.Items) == 0 {
-		return microerror.Maskf(errors.NotFound, "AzureCluster for %q", m.clusterID)
+		return microerror.Mask(fmt.Errorf("AzureCluster not found for %q", m.clusterID))
 	}
 
 	obj := objList.Items[0]
