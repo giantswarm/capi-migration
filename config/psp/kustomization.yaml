@@ -1,0 +1,7 @@
+configurations:
+- namereference.yaml
+
+resources:
+- psp.yaml
+- psp_role.yaml
+- psp_role_binding.yaml
