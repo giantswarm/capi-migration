@@ -11,16 +11,13 @@ jobs:
         with:
           go-version: '^1.16.2'
       # This can be removed when switching to kubebuilder@v3.
+      # For now etcd binary is required to be in there.
       - name: Install kubebuilder
+        env:
+          version: "2.3.2"
         run: |
-          sudo mkdir -p /usr/local/kubebuilder
-          sudo chmod 0777 /usr/local/kubebuilder
-          curl -L https://go.kubebuilder.io/dl/2.3.2/linux/amd64 | tar -xz -C /usr/local/kubebuilder
-          echo "ls /usr/local/kubebuilder"
-          ls -la /usr/local/kubebuilder
-          echo "ls /usr/local/kubebuilder/bin"
-          ls -la /usr/local/kubebuilder/bin
-          exit 1
+          curl -L https://go.kubebuilder.io/dl/${{ env.version }}/linux/amd64 | tar -xz -C /tmp
+          sudo mv /tmp/kubebuilder_${{ env.version }}_linux_amd64 /usr/local/kubebuilder
       - uses: actions/cache@v2
         with:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
