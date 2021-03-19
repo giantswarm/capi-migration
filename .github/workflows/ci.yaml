@@ -16,6 +16,11 @@ jobs:
           sudo mkdir -p /usr/local/kubebuilder
           sudo chmod 0777 /usr/local/kubebuilder
           curl -L https://go.kubebuilder.io/dl/2.3.2/linux/amd64 | tar -xz -C /usr/local/kubebuilder
+          echo "ls /usr/local/kubebuilder"
+          ls -la /usr/local/kubebuilder
+          echo "ls /usr/local/kubebuilder/bin"
+          ls -la /usr/local/kubebuilder/bin
+          exit 1
       - uses: actions/cache@v2
         with:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
