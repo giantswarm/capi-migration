@@ -2,6 +2,8 @@
 // flavor to upstream compatible CAPI.
 package migration
 
+import "context"
+
 type MigratorFactory interface {
 	// Construct new Migrator for given cluster.
 	NewMigrator(clusterID string) (Migrator, error)
@@ -9,21 +11,21 @@ type MigratorFactory interface {
 
 type Migrator interface {
 	// Cleanup performs cleanup operations after migration has been completed.
-	Cleanup() error
+	Cleanup(ctx context.Context) error
 
 	// IsMigrated performs check to see if given cluster has been already
 	// migrated.
-	IsMigrated() (bool, error)
+	IsMigrated(ctx context.Context) (bool, error)
 
 	// IsMigrating performs check to see if given cluster has migration
 	// triggered already.
-	IsMigrating() (bool, error)
+	IsMigrating(ctx context.Context) (bool, error)
 
 	// Prepare executes preparatory migration actions such as transforming
 	// existing CRs into upstream compatible format and creating missing CRs.
-	Prepare() error
+	Prepare(ctx context.Context) error
 
 	// TriggerMigration performs final execution which shifts reconciliation to
 	// upstream controllers.
-	TriggerMigration() error
+	TriggerMigration(ctx context.Context) error
 }
