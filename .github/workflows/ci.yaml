@@ -13,7 +13,8 @@ jobs:
       # This can be removed when switching to kubebuilder@v3.
       - name: Install kubebuilder
         run: |
-          mkdir -p /usr/local/kubebuilder
+          sudo mkdir -p /usr/local/kubebuilder
+          sudo chown ${{env.USER}} /usr/local/kubebuilder
           curl -L https://go.kubebuilder.io/dl/2.3.2/linux/amd64 | tar -xz -C /usr/local/kubebuilder
       - uses: actions/cache@v2
         with:
