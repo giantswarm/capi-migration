@@ -10,6 +10,7 @@
  * Roll the existing masters with a CA bundle of the old and new CA
  * Export the root (cert and key) from vault and store it in a secret on the management cluster
  * Disable the old controller-managers (new nodes will not be able to join otherwise)
+ * Disable the old api-server (as soon as the local etcd instance is removed from the etcd cluster, it will fail because it can't connect to etcd any more. This causes the API service to be down even if the new API server instance is running).
 
 ### Migration Phase
 
