@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/giantswarm/microerror"
+	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type AzureMigrationConfig struct {
@@ -17,6 +19,10 @@ type azureMigratorFactory struct {
 
 type azureMigrator struct {
 	clusterID string
+
+	ctrlClient ctrl.Client
+
+	crs map[string]runtime.Object
 
 	// Migration configuration, dependencies + intermediate cache for involved
 	// CRs.
@@ -95,6 +101,33 @@ func (m *azureMigrator) Cleanup(ctx context.Context) error {
 // - AzureMachinePools
 //
 func (m *azureMigrator) readCRs(ctx context.Context) error {
+	var err error
+
+	err = m.readAzureConfig(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readCluster(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readAzureCluster(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readMachinePools(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readAzureMachinePools(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
 	return nil
 }
 
