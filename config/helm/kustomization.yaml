@@ -1,3 +1,5 @@
+namespace: giantswarm
+
 images:
 - name: controller
   newName: "{{ .Values.Installation.V1.Registry.Domain }}/{{ .Values.image.name }}"
