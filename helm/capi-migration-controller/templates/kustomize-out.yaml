@@ -198,23 +198,6 @@ metadata:
   name: capi-migration-controller-manager-vault-token
   namespace: giantswarm
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    app.kubernetes.io/name: capi-migration
-    control-plane: controller-manager
-  name: capi-migration-controller-manager-metrics-service
-  namespace: giantswarm
-spec:
-  ports:
-  - name: https
-    port: 8443
-    targetPort: https
-  selector:
-    app.kubernetes.io/name: capi-migration
-    control-plane: controller-manager
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -237,7 +220,7 @@ spec:
     spec:
       containers:
       - args:
-        - --enable-leader-election
+        - --leader-elect
         command:
         - /manager
         env:
