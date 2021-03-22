@@ -3,9 +3,7 @@ package migration
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"github.com/giantswarm/backoff"
 	"github.com/giantswarm/microerror"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -76,31 +74,6 @@ func (m *azureMigrator) stopOldMasterComponents(ctx context.Context) error {
 		err = m.wcCtrlClient.Create(ctx, &pod)
 		if err != nil {
 			return microerror.Mask(err)
-		}
-
-		// Wait for pod to be succeeded.
-		{
-			o := func() error {
-				var runningPod corev1.Pod
-				err = m.wcCtrlClient.Get(ctx, client.ObjectKey{Namespace: podNamespace, Name: podName}, &runningPod)
-				if err != nil {
-					return microerror.Mask(err)
-				}
-
-				switch runningPod.Status.Phase {
-				case corev1.PodSucceeded:
-					return nil
-				case corev1.PodFailed:
-					return backoff.Permanent(microerror.Mask(err))
-				default:
-					return microerror.Maskf(podNotSucceededError, "Pod Phase is %q, waiting", runningPod.Status.Phase)
-				}
-			}
-
-			err := backoff.RetryNotify(o, backoff.NewConstant(3*time.Minute, 10*time.Second), backoff.NewNotifier(m.logger, ctx))
-			if err != nil {
-				return microerror.Mask(err)
-			}
 		}
 	}
 
