@@ -3,6 +3,7 @@ module github.com/giantswarm/capi-migration
 go 1.16
 
 require (
+	github.com/giantswarm/backoff v0.2.0 // indirect
 	github.com/giantswarm/microerror v0.3.0
 	github.com/giantswarm/micrologger v0.5.0
 	github.com/onsi/ginkgo v1.14.1

@@ -5,10 +5,14 @@ import (
 	"fmt"
 
 	"github.com/giantswarm/microerror"
+	"github.com/giantswarm/micrologger"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type AzureMigrationConfig struct {
 	// Migration configuration + dependencies such as k8s client.
+	ctrlClient client.Client
+	logger     micrologger.Logger
 }
 
 type azureMigratorFactory struct {
@@ -17,9 +21,10 @@ type azureMigratorFactory struct {
 
 type azureMigrator struct {
 	clusterID string
-
 	// Migration configuration, dependencies + intermediate cache for involved
 	// CRs.
+	ctrlClient client.Client
+	logger     micrologger.Logger
 }
 
 func NewAzureMigratorFactory(cfg AzureMigrationConfig) (MigratorFactory, error) {
@@ -32,6 +37,8 @@ func (f *azureMigratorFactory) NewMigrator(clusterID string) (Migrator, error) {
 	return &azureMigrator{
 		clusterID: clusterID,
 		// rest of the config from f.config...
+		ctrlClient: f.config.ctrlClient,
+		logger:     f.config.logger,
 	}, nil
 }
 
@@ -57,6 +64,11 @@ func (m *azureMigrator) Prepare(ctx context.Context) error {
 	}
 
 	err = m.updateCRs(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.stopOldMasterComponents(ctx)
 	if err != nil {
 		return microerror.Mask(err)
 	}
