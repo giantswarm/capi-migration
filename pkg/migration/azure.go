@@ -4,15 +4,19 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/giantswarm/k8sclient/v4/pkg/k8sclient"
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
+	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type AzureMigrationConfig struct {
 	// Migration configuration + dependencies such as k8s client.
-	ctrlClient client.Client
-	logger     micrologger.Logger
+	Logger        micrologger.Logger
+	TenantCluster tenantcluster.Interface
 }
 
 type azureMigratorFactory struct {
@@ -23,8 +27,8 @@ type azureMigrator struct {
 	clusterID string
 	// Migration configuration, dependencies + intermediate cache for involved
 	// CRs.
-	ctrlClient client.Client
-	logger     micrologger.Logger
+	logger       micrologger.Logger
+	wcCtrlClient client.Client
 }
 
 func NewAzureMigratorFactory(cfg AzureMigrationConfig) (MigratorFactory, error) {
@@ -33,12 +37,27 @@ func NewAzureMigratorFactory(cfg AzureMigrationConfig) (MigratorFactory, error) 
 	}, nil
 }
 
-func (f *azureMigratorFactory) NewMigrator(clusterID string) (Migrator, error) {
+func (f *azureMigratorFactory) NewMigrator(cluster v1alpha3.Cluster) (Migrator, error) {
+	// Can't init the WC ctrl client here because I don't have the cluster object and so no control plane endpoint.
+
+	restConfig, err := f.config.TenantCluster.NewRestConfig(context.Background(), cluster.Name, cluster.Spec.ControlPlaneEndpoint.Host)
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+
+	k8sClient, err := k8sclient.NewClients(k8sclient.ClientsConfig{
+		Logger:     f.config.Logger,
+		RestConfig: rest.CopyConfig(restConfig),
+	})
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+
 	return &azureMigrator{
-		clusterID: clusterID,
+		clusterID: cluster.Name,
 		// rest of the config from f.config...
-		ctrlClient: f.config.ctrlClient,
-		logger:     f.config.logger,
+		logger:       f.config.Logger,
+		wcCtrlClient: k8sClient.CtrlClient(),
 	}, nil
 }
 
