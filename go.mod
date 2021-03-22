@@ -3,11 +3,12 @@ module github.com/giantswarm/capi-migration
 go 1.16
 
 require (
-	github.com/giantswarm/backoff v0.2.0 // indirect
+	github.com/giantswarm/backoff v0.2.0
 	github.com/giantswarm/microerror v0.3.0
 	github.com/giantswarm/micrologger v0.5.0
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.2
+	k8s.io/api v0.20.2
 	k8s.io/apimachinery v0.20.2
 	k8s.io/client-go v0.20.2
 	sigs.k8s.io/cluster-api v0.0.0
