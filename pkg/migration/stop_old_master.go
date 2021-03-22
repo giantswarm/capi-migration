@@ -19,7 +19,7 @@ func (m *azureMigrator) stopOldMasterComponents(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	m.logger.Debugf(ctx, "Found %d legacy nodes to disable master nodes into")
+	m.logger.Debugf(ctx, "Found %d legacy nodes", len(nodeNames))
 
 	for _, nodeName := range nodeNames {
 		podName := fmt.Sprintf("disable-master-node-components-%s", nodeName)
@@ -51,7 +51,8 @@ func (m *azureMigrator) stopOldMasterComponents(ctx context.Context) error {
 					},
 					Containers: []corev1.Container{
 						{
-							Name: "disable-master-node-components",
+							Name:  "disable-master-node-components",
+							Image: "alpine:latest",
 							Command: []string{
 								"ash",
 								"-c",
