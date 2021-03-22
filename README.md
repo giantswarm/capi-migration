@@ -2,6 +2,9 @@
 
 # capi-migration
 
+- [Migration process outline](#migration-process-outline)
+- [Development](#development)
+
 ## Migration process outline
 
 ### Preparation Phase
@@ -32,3 +35,18 @@
  * worker nodes still have `useManagedIdentity` set to `false` despite the `AzureMachineTemplate` having it set to `SystemAssigned`  (this is likely the cause for external-dns crash listed above)
  * PVC are not being provisioned
  * Load balancer has issues (might be related to https://github.com/kubernetes-sigs/cloud-provider-azure/issues/363)
+
+## Development
+
+To try things quickly you can run `make run`. That will run `main.go` against
+a current kubectl context (i.e. `kubectl config current-context`).
+
+To make it work you need to export vault credentials:
+
+```sh
+export VAULT_ADDR="https://..."
+export VAULT_TOKEN="..."
+export export VAULT_CAPATH="/..."
+
+make run
+```

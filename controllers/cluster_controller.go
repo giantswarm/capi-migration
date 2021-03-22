@@ -25,6 +25,7 @@ import (
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
 	"github.com/giantswarm/micrologger/loggermeta"
+	vaultapi "github.com/hashicorp/vault/api"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,8 +36,9 @@ import (
 // ClusterReconciler reconciles a Cluster object
 type ClusterReconciler struct {
 	client.Client
-	Log    micrologger.Logger
-	Scheme *runtime.Scheme
+	Log         micrologger.Logger
+	VaultClient *vaultapi.Client
+	Scheme      *runtime.Scheme
 
 	loopSeq int64
 }

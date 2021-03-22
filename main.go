@@ -23,17 +23,19 @@ import (
 	"os"
 	"strings"
 
+	"github.com/giantswarm/microerror"
+	"github.com/giantswarm/micrologger"
+	vaultapi "github.com/hashicorp/vault/api"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	capiv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/giantswarm/capi-migration/controllers"
-	"github.com/giantswarm/microerror"
-	"github.com/giantswarm/micrologger"
-	capiv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	// +kubebuilder:scaffold:imports
+
+	"github.com/giantswarm/capi-migration/controllers"
 )
 
 var (
@@ -50,20 +52,25 @@ func init() {
 var flags = struct {
 	EnableLeaderElection bool
 	MetricsAddr          string
+	VaultAddr            string
+	VaultToken           string
 }{}
 
 func initFlags() {
 	flag.BoolVar(&flags.EnableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
+	flag.StringVar(&flags.VaultAddr, "vault-addr", os.Getenv("VAULT_ADDR"), "The address of the vault to connect to. Defaults to VAULT_ADDR.")
+	flag.StringVar(&flags.VaultToken, "vault-token", os.Getenv("VAULT_TOKEN"), "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
 	flag.StringVar(&flags.MetricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.Parse()
 
 	var errors []string
 
-	// Flag validation goes here.
-	//
-	//if flags.MyFlag == "" {
-	//	errors = append(errors, "--my-flag must be not empty")
-	//}
+	if flags.VaultAddr == "" {
+		errors = append(errors, "--vault-addr flag or VAULT_ADDR environment variable must be set")
+	}
+	if flags.VaultToken == "" {
+		errors = append(errors, "--vault-token flag or VAULT_TOKEN environment variable must be set")
+	}
 
 	if len(errors) > 1 {
 		fmt.Fprintf(os.Stderr, "%s\n", strings.Join(errors, "\n"))
@@ -99,10 +106,27 @@ func mainE(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
+	var vaultClient *vaultapi.Client
+	{
+		c := vaultapi.DefaultConfig()
+		c.Address = flags.VaultAddr
+		vaultClient, err = vaultapi.NewClient(c)
+		if err != nil {
+			return nil
+		}
+		vaultClient.SetToken(flags.VaultToken)
+
+		// Check vault connectivity.
+		_, err := vaultClient.Auth().Token().LookupSelf()
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
 	if err = (&controllers.ClusterReconciler{
-		Client: mgr.GetClient(),
-		Log:    log,
-		Scheme: mgr.GetScheme(),
+		Client:      mgr.GetClient(),
+		Log:         log,
+		VaultClient: vaultClient,
+		Scheme:      mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		return microerror.Mask(err)
 	}
