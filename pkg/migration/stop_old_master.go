@@ -72,7 +72,7 @@ func (m *azureMigrator) stopOldMasterComponents(ctx context.Context) error {
 		}
 
 		// Create pod.
-		err = m.ctrlClient.Create(ctx, &pod)
+		err = m.wcCtrlClient.Create(ctx, &pod)
 		if err != nil {
 			return microerror.Mask(err)
 		}
@@ -81,7 +81,7 @@ func (m *azureMigrator) stopOldMasterComponents(ctx context.Context) error {
 		{
 			o := func() error {
 				var runningPod corev1.Pod
-				err = m.ctrlClient.Get(ctx, client.ObjectKey{Namespace: podNamespace, Name: podName}, &runningPod)
+				err = m.wcCtrlClient.Get(ctx, client.ObjectKey{Namespace: podNamespace, Name: podName}, &runningPod)
 				if err != nil {
 					return microerror.Mask(err)
 				}
@@ -108,7 +108,7 @@ func (m *azureMigrator) stopOldMasterComponents(ctx context.Context) error {
 
 func (m *azureMigrator) getLegacyMasterNodeNames(ctx context.Context) ([]string, error) {
 	nodeList := corev1.NodeList{}
-	err := m.ctrlClient.List(ctx, &nodeList, client.MatchingLabels{"role": "master"})
+	err := m.wcCtrlClient.List(ctx, &nodeList, client.MatchingLabels{"role": "master"})
 	if err != nil {
 		return nil, microerror.Mask(err)
 	}
