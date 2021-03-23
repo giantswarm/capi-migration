@@ -25,6 +25,10 @@ func (m *azureMigrator) readAzureConfig(ctx context.Context) error {
 		return microerror.Mask(fmt.Errorf("AzureConfig not found for %q", m.clusterID))
 	}
 
+	if len(objList.Items) > 1 {
+		return microerror.Mask(fmt.Errorf("more than one AzureConfig for cluster ID %q", m.clusterID))
+	}
+
 	obj := objList.Items[0]
 	m.crs[obj.Kind] = &obj
 
@@ -43,6 +47,10 @@ func (m *azureMigrator) readCluster(ctx context.Context) error {
 		return microerror.Mask(fmt.Errorf("Cluster not found for %q", m.clusterID))
 	}
 
+	if len(objList.Items) > 1 {
+		return microerror.Mask(fmt.Errorf("more than one Cluster for cluster ID %q", m.clusterID))
+	}
+
 	obj := objList.Items[0]
 	m.crs[obj.Kind] = &obj
 
@@ -59,6 +67,10 @@ func (m *azureMigrator) readAzureCluster(ctx context.Context) error {
 
 	if len(objList.Items) == 0 {
 		return microerror.Mask(fmt.Errorf("AzureCluster not found for %q", m.clusterID))
+	}
+
+	if len(objList.Items) > 1 {
+		return microerror.Mask(fmt.Errorf("more than one AzureCluster for cluster ID %q", m.clusterID))
 	}
 
 	obj := objList.Items[0]
