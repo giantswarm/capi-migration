@@ -22,7 +22,11 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/giantswarm/certs/v3/pkg/certs"
+	"github.com/giantswarm/k8sclient/v4/pkg/k8sclient"
+	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -30,6 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/giantswarm/capi-migration/controllers"
+	"github.com/giantswarm/capi-migration/pkg/migration"
+
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
 	capiv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
@@ -53,8 +59,8 @@ var flags = struct {
 }{}
 
 func initFlags() {
-	flag.BoolVar(&flags.EnableLeaderElection, "enable-leader-election", false, "Enable leader election for controller manager.")
-	flag.StringVar(&flags.MetricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	flag.BoolVar(&flags.EnableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
+	flag.StringVar(&flags.MetricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.Parse()
 
 	var errors []string
@@ -99,10 +105,57 @@ func mainE(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
+	var certsSearcher *certs.Searcher
+	{
+		clients, err := k8sclient.NewClients(k8sclient.ClientsConfig{
+			Logger:     log,
+			RestConfig: mgr.GetConfig(),
+		})
+		if err != nil {
+			return microerror.Mask(err)
+		}
+
+		c := certs.Config{
+			K8sClient: clients.K8sClient(),
+			Logger:    log,
+
+			WatchTimeout: 30 * time.Second,
+		}
+
+		certsSearcher, err = certs.NewSearcher(c)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
+
+	var tenantCluster *tenantcluster.TenantCluster
+	{
+		tenantCluster, err = tenantcluster.New(tenantcluster.Config{
+			CertsSearcher: certsSearcher,
+			Logger:        log,
+			CertID:        certs.APICert,
+		})
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
+
+	var azureMigratorFactory migration.MigratorFactory
+	{
+		azureMigratorFactory, err = migration.NewAzureMigratorFactory(migration.AzureMigrationConfig{
+			Logger:        log,
+			TenantCluster: tenantCluster,
+		})
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
+
 	if err = (&controllers.ClusterReconciler{
-		Client: mgr.GetClient(),
-		Log:    log,
-		Scheme: mgr.GetScheme(),
+		Client:          mgr.GetClient(),
+		Log:             log,
+		MigratorFactory: azureMigratorFactory,
+		Scheme:          mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		return microerror.Mask(err)
 	}

@@ -16,7 +16,7 @@ import (
 func (m *azureMigrator) readAzureConfig(ctx context.Context) error {
 	objList := &provider.AzureConfigList{}
 	selector := ctrl.MatchingLabels{capi.ClusterLabelName: m.clusterID}
-	err := m.ctrlClient.List(ctx, objList, selector)
+	err := m.mcCtrlClient.List(ctx, objList, selector)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -34,7 +34,7 @@ func (m *azureMigrator) readAzureConfig(ctx context.Context) error {
 func (m *azureMigrator) readCluster(ctx context.Context) error {
 	objList := &capi.ClusterList{}
 	selector := ctrl.MatchingLabels{capi.ClusterLabelName: m.clusterID}
-	err := m.ctrlClient.List(ctx, objList, selector)
+	err := m.mcCtrlClient.List(ctx, objList, selector)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -52,7 +52,7 @@ func (m *azureMigrator) readCluster(ctx context.Context) error {
 func (m *azureMigrator) readAzureCluster(ctx context.Context) error {
 	objList := &capz.AzureClusterList{}
 	selector := ctrl.MatchingLabels{capi.ClusterLabelName: m.clusterID}
-	err := m.ctrlClient.List(ctx, objList, selector)
+	err := m.mcCtrlClient.List(ctx, objList, selector)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -70,7 +70,7 @@ func (m *azureMigrator) readAzureCluster(ctx context.Context) error {
 func (m *azureMigrator) readMachinePools(ctx context.Context) error {
 	objList := &capiexp.MachinePoolList{}
 	selector := ctrl.MatchingLabels{capi.ClusterLabelName: m.clusterID}
-	err := m.ctrlClient.List(ctx, objList, selector)
+	err := m.mcCtrlClient.List(ctx, objList, selector)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -83,7 +83,7 @@ func (m *azureMigrator) readMachinePools(ctx context.Context) error {
 func (m *azureMigrator) readAzureMachinePools(ctx context.Context) error {
 	objList := &capzexp.AzureMachinePoolList{}
 	selector := ctrl.MatchingLabels{capi.ClusterLabelName: m.clusterID}
-	err := m.ctrlClient.List(ctx, objList, selector)
+	err := m.mcCtrlClient.List(ctx, objList, selector)
 	if err != nil {
 		return microerror.Mask(err)
 	}

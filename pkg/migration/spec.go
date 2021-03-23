@@ -2,11 +2,15 @@
 // flavor to upstream compatible CAPI.
 package migration
 
-import "context"
+import (
+	"context"
+
+	"sigs.k8s.io/cluster-api/api/v1alpha3"
+)
 
 type MigratorFactory interface {
 	// Construct new Migrator for given cluster.
-	NewMigrator(clusterID string) (Migrator, error)
+	NewMigrator(cluster *v1alpha3.Cluster) (Migrator, error)
 }
 
 type Migrator interface {

@@ -1,0 +1,11 @@
+namespace: capi-migration-system-dev
+
+images:
+- name: controller
+  newName: giantswarm/capi-migration
+  newTag: latest
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../giantswarm
