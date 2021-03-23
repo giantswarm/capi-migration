@@ -8,11 +8,14 @@ require (
 	github.com/giantswarm/micrologger v0.5.0
 	github.com/onsi/ginkgo v1.14.2
 	github.com/onsi/gomega v1.10.3
-	k8s.io/apimachinery v0.20.2
-	k8s.io/client-go v0.20.2
+	k8s.io/api v0.18.9
+	k8s.io/apimachinery v0.18.9
+	k8s.io/client-go v0.18.9
+	k8s.io/kubectl v0.18.6
 	sigs.k8s.io/cluster-api v0.3.14
 	sigs.k8s.io/cluster-api-provider-azure v0.4.13
-	sigs.k8s.io/controller-runtime v0.8.2
+	sigs.k8s.io/controller-runtime v0.6.3
+	sigs.k8s.io/yaml v1.2.0
 )
 
 replace (

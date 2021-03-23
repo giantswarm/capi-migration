@@ -11,6 +11,7 @@ import (
 
 type AzureMigrationConfig struct {
 	// Migration configuration + dependencies such as k8s client.
+	ctrlClient ctrl.Client
 }
 
 type azureMigratorFactory struct {
@@ -42,7 +43,7 @@ func (f *azureMigratorFactory) NewMigrator(clusterID string) (Migrator, error) {
 }
 
 func (m *azureMigrator) IsMigrated(ctx context.Context) (bool, error) {
-	return true, nil
+	return false, nil
 }
 
 func (m *azureMigrator) IsMigrating(ctx context.Context) (bool, error) {
@@ -103,6 +104,11 @@ func (m *azureMigrator) Cleanup(ctx context.Context) error {
 func (m *azureMigrator) readCRs(ctx context.Context) error {
 	var err error
 
+	err = m.readEncryptionSecret(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
 	err = m.readAzureConfig(ctx)
 	if err != nil {
 		return microerror.Mask(err)
@@ -135,6 +141,43 @@ func (m *azureMigrator) readCRs(ctx context.Context) error {
 // reconciliation to work. This include e.g. KubeAdmControlPlane and
 // AzureMachineTemplate for new master nodes.
 func (m *azureMigrator) prepareMissingCRs(ctx context.Context) error {
+	var err error
+
+	err = m.createEncryptionConfigSecret(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.createProxyConfigSecret(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.createKubeadmControlPlane(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.createMasterAzureMachineTemplate(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.createWorkersKubeadmConfigTemplate(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.createWorkersAzureMachineTemplate(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.createWorkersMachineDeployment(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
 	return nil
 }
 
