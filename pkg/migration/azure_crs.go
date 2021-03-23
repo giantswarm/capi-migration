@@ -65,7 +65,7 @@ resources:
 		},
 	}
 
-	err := m.ctrlClient.Create(ctx, s)
+	err := m.mcCtrlClient.Create(ctx, s)
 	if apierrors.IsAlreadyExists(err) {
 		// It's fine. No worries.
 	} else if err != nil {
@@ -94,7 +94,7 @@ metricsBindAddress: 0.0.0.0:10249`
 			"proxy": proxyConfig,
 		},
 	}
-	err := m.ctrlClient.Create(ctx, s)
+	err := m.mcCtrlClient.Create(ctx, s)
 	if apierrors.IsAlreadyExists(err) {
 		// It's fine. No worries.
 	} else if err != nil {
@@ -138,7 +138,7 @@ func (m *azureMigrator) createKubeadmControlPlane(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	err = m.ctrlClient.Create(ctx, kcp)
+	err = m.mcCtrlClient.Create(ctx, kcp)
 	if apierrors.IsAlreadyExists(err) {
 		// It's ok. It's already there.
 	} else if err != nil {
@@ -172,7 +172,7 @@ func (m *azureMigrator) createMasterAzureMachineTemplate(ctx context.Context) er
 		return microerror.Mask(err)
 	}
 
-	err = m.ctrlClient.Create(ctx, amt)
+	err = m.mcCtrlClient.Create(ctx, amt)
 	if apierrors.IsAlreadyExists(err) {
 		// It's ok. It's already there.
 	} else if err != nil {
@@ -206,7 +206,7 @@ func (m *azureMigrator) createWorkersKubeadmConfigTemplate(ctx context.Context) 
 		return microerror.Mask(err)
 	}
 
-	err = m.ctrlClient.Create(ctx, kct)
+	err = m.mcCtrlClient.Create(ctx, kct)
 	if apierrors.IsAlreadyExists(err) {
 		// It's ok. It's already there.
 	} else if err != nil {
@@ -240,7 +240,7 @@ func (m *azureMigrator) createWorkersAzureMachineTemplate(ctx context.Context) e
 		return microerror.Mask(err)
 	}
 
-	err = m.ctrlClient.Create(ctx, amt)
+	err = m.mcCtrlClient.Create(ctx, amt)
 	if apierrors.IsAlreadyExists(err) {
 		// It's ok. It's already there.
 	} else if err != nil {
@@ -276,7 +276,7 @@ func (m *azureMigrator) createWorkersMachineDeployment(ctx context.Context) erro
 		return microerror.Mask(err)
 	}
 
-	err = m.ctrlClient.Create(ctx, md)
+	err = m.mcCtrlClient.Create(ctx, md)
 	if apierrors.IsAlreadyExists(err) {
 		// It's ok. It's already there.
 	} else if err != nil {
@@ -289,7 +289,7 @@ func (m *azureMigrator) createWorkersMachineDeployment(ctx context.Context) erro
 func (m *azureMigrator) readEncryptionSecret(ctx context.Context) error {
 	obj := &corev1.Secret{}
 	key := ctrl.ObjectKey{Namespace: "default", Name: fmt.Sprintf("%s-encryption", m.clusterID)}
-	err := m.ctrlClient.Get(ctx, key, obj)
+	err := m.mcCtrlClient.Get(ctx, key, obj)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -302,7 +302,7 @@ func (m *azureMigrator) readEncryptionSecret(ctx context.Context) error {
 func (m *azureMigrator) readAzureConfig(ctx context.Context) error {
 	objList := &provider.AzureConfigList{}
 	selector := ctrl.MatchingLabels{capi.ClusterLabelName: m.clusterID}
-	err := m.ctrlClient.List(ctx, objList, selector)
+	err := m.mcCtrlClient.List(ctx, objList, selector)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -320,7 +320,7 @@ func (m *azureMigrator) readAzureConfig(ctx context.Context) error {
 func (m *azureMigrator) readCluster(ctx context.Context) error {
 	objList := &capi.ClusterList{}
 	selector := ctrl.MatchingLabels{capi.ClusterLabelName: m.clusterID}
-	err := m.ctrlClient.List(ctx, objList, selector)
+	err := m.mcCtrlClient.List(ctx, objList, selector)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -338,7 +338,7 @@ func (m *azureMigrator) readCluster(ctx context.Context) error {
 func (m *azureMigrator) readAzureCluster(ctx context.Context) error {
 	objList := &capz.AzureClusterList{}
 	selector := ctrl.MatchingLabels{capi.ClusterLabelName: m.clusterID}
-	err := m.ctrlClient.List(ctx, objList, selector)
+	err := m.mcCtrlClient.List(ctx, objList, selector)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -356,7 +356,7 @@ func (m *azureMigrator) readAzureCluster(ctx context.Context) error {
 func (m *azureMigrator) readMachinePools(ctx context.Context) error {
 	objList := &capiexp.MachinePoolList{}
 	selector := ctrl.MatchingLabels{capi.ClusterLabelName: m.clusterID}
-	err := m.ctrlClient.List(ctx, objList, selector)
+	err := m.mcCtrlClient.List(ctx, objList, selector)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -369,7 +369,7 @@ func (m *azureMigrator) readMachinePools(ctx context.Context) error {
 func (m *azureMigrator) readAzureMachinePools(ctx context.Context) error {
 	objList := &capzexp.AzureMachinePoolList{}
 	selector := ctrl.MatchingLabels{capi.ClusterLabelName: m.clusterID}
-	err := m.ctrlClient.List(ctx, objList, selector)
+	err := m.mcCtrlClient.List(ctx, objList, selector)
 	if err != nil {
 		return microerror.Mask(err)
 	}

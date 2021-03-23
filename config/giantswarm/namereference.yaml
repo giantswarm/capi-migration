@@ -1,0 +1,7 @@
+nameReference:
+- kind: PodSecurityPolicy
+  fieldSpecs:
+  - path: rules/resourceNames
+    kind: Role
+  - path: rules/resourceNames
+    kind: ClusterRole
