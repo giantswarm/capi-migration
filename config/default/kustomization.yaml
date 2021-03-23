@@ -15,7 +15,6 @@ commonLabels:
 bases:
 - ../crd
 - ../rbac
-- ../psp
 - ../manager
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in 
 # crd/kustomization.yaml
