@@ -17,7 +17,7 @@ func (m *azureMigrator) stopOldMasterComponents(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	m.logger.Debugf(ctx, "Found %d legacy nodes", len(nodeNames))
+	m.logger.Debugf(ctx, "found %d legacy nodes", len(nodeNames))
 
 	for _, nodeName := range nodeNames {
 		podName := fmt.Sprintf("disable-master-node-components-%s", nodeName)
