@@ -98,7 +98,7 @@ func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *ClusterReconciler) reconcile(ctx context.Context, cluster *capiv1alpha3.Cluster) (ctrl.Result, error) {
 	r.Log.Debugf(ctx, "calling reconcile")
 
-	migrator, err := r.MigratorFactory.NewMigrator(*cluster)
+	migrator, err := r.MigratorFactory.NewMigrator(cluster)
 	if err != nil {
 		return ctrl.Result{}, microerror.Mask(err)
 	}
@@ -126,14 +126,17 @@ func (r *ClusterReconciler) reconcile(ctx context.Context, cluster *capiv1alpha3
 
 	if migrating {
 		// Migration has been triggered but it's not complete yet.
+		r.Log.Debugf(ctx, "cluster migration is in progress")
 		return ctrl.Result{}, nil
 	}
 
+	r.Log.Debugf(ctx, "preparing cluster migration")
 	err = migrator.Prepare(ctx)
 	if err != nil {
 		return ctrl.Result{}, microerror.Mask(err)
 	}
 
+	r.Log.Debugf(ctx, "triggering cluster migration")
 	err = migrator.TriggerMigration(ctx)
 	if err != nil {
 		return ctrl.Result{}, microerror.Mask(err)

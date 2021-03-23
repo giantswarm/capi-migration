@@ -10,7 +10,7 @@ import (
 
 type MigratorFactory interface {
 	// Construct new Migrator for given cluster.
-	NewMigrator(cluster v1alpha3.Cluster) (Migrator, error)
+	NewMigrator(cluster *v1alpha3.Cluster) (Migrator, error)
 }
 
 type Migrator interface {

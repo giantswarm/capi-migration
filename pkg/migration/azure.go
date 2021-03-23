@@ -37,10 +37,9 @@ func NewAzureMigratorFactory(cfg AzureMigrationConfig) (MigratorFactory, error) 
 	}, nil
 }
 
-func (f *azureMigratorFactory) NewMigrator(cluster v1alpha3.Cluster) (Migrator, error) {
-	// Can't init the WC ctrl client here because I don't have the cluster object and so no control plane endpoint.
-
-	restConfig, err := f.config.TenantCluster.NewRestConfig(context.Background(), cluster.Name, cluster.Spec.ControlPlaneEndpoint.Host)
+func (f *azureMigratorFactory) NewMigrator(cluster *v1alpha3.Cluster) (Migrator, error) {
+	url := fmt.Sprintf("%s:%d", cluster.Spec.ControlPlaneEndpoint.Host, cluster.Spec.ControlPlaneEndpoint.Port)
+	restConfig, err := f.config.TenantCluster.NewRestConfig(context.Background(), cluster.Name, url)
 	if err != nil {
 		return nil, microerror.Mask(err)
 	}
