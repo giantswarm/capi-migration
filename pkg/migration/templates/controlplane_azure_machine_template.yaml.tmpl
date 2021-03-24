@@ -12,7 +12,7 @@ spec:
         nameSuffix: etcddisk
       enableIPForwarding: true
       identity: SystemAssigned
-      location: germanywestcentral
+      location: {{ .AzureLocation }}
       osDisk:
         diskSizeGB: 128
         managedDisk:

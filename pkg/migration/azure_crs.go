@@ -153,10 +153,9 @@ func (m *azureMigrator) createMasterAzureMachineTemplate(ctx context.Context) er
 		return microerror.Mask(err)
 	}
 
-	cfg := struct {
-		ClusterID string
-	}{
-		ClusterID: m.clusterID,
+	cfg := map[string]string{
+		"ClusterID":     m.clusterID,
+		"AzureLocation": m.crs.azureCluster.Spec.Location,
 	}
 
 	buf := bytes.NewBuffer(nil)
@@ -187,10 +186,8 @@ func (m *azureMigrator) createWorkersKubeadmConfigTemplate(ctx context.Context) 
 		return microerror.Mask(err)
 	}
 
-	cfg := struct {
-		ClusterID string
-	}{
-		ClusterID: m.clusterID,
+	cfg := map[string]string{
+		"ClusterID": m.clusterID,
 	}
 
 	buf := bytes.NewBuffer(nil)
@@ -221,10 +218,8 @@ func (m *azureMigrator) createWorkersAzureMachineTemplate(ctx context.Context) e
 		return microerror.Mask(err)
 	}
 
-	cfg := struct {
-		ClusterID string
-	}{
-		ClusterID: m.clusterID,
+	cfg := map[string]string{
+		"ClusterID": m.clusterID,
 	}
 
 	buf := bytes.NewBuffer(nil)
@@ -255,12 +250,9 @@ func (m *azureMigrator) createWorkersMachineDeployment(ctx context.Context) erro
 		return microerror.Mask(err)
 	}
 
-	cfg := struct {
-		ClusterID  string
-		K8sVersion string
-	}{
-		ClusterID:  m.clusterID,
-		K8sVersion: "v1.19.9",
+	cfg := map[string]string{
+		"ClusterID":  m.clusterID,
+		"K8sVersion": "v1.19.9",
 	}
 
 	buf := bytes.NewBuffer(nil)
