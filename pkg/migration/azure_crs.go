@@ -30,19 +30,6 @@ const (
 )
 
 func (m *azureMigrator) createEncryptionConfigSecret(ctx context.Context) error {
-	var origEncryptionSecret *corev1.Secret
-	{
-		obj, exists := m.crs[EncryptionSecret]
-		if !exists {
-			return microerror.Mask(fmt.Errorf("encryption secret not found"))
-		}
-
-		origEncryptionSecret, ok := obj.(*corev1.Secret)
-		if !ok {
-			return microerror.Mask(fmt.Errorf("can't convert obj (%T) to %T", obj, origEncryptionSecret))
-		}
-	}
-
 	encryptionConfigTmpl := `
 kind: EncryptionConfiguration
 apiVersion: apiserver.config.k8s.io/v1
@@ -56,7 +43,7 @@ resources:
           secret: %s
     - identity: {}`
 
-	renderedConfig := fmt.Sprintf(encryptionConfigTmpl, origEncryptionSecret.Data["encryption"])
+	renderedConfig := fmt.Sprintf(encryptionConfigTmpl, m.crs.encryptionSecret.Data["encryption"])
 
 	s := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -109,37 +96,22 @@ metricsBindAddress: 0.0.0.0:10249`
 }
 
 func (m *azureMigrator) createKubeadmControlPlane(ctx context.Context) error {
-	var cluster *capz.AzureCluster
-	{
-		obj, found := m.crs["AzureCluster"]
-		if !found {
-			return microerror.Mask(fmt.Errorf("AzureCluster not found"))
-		}
-
-		c, ok := obj.(*capz.AzureCluster)
-		if !ok {
-			return microerror.Mask(fmt.Errorf("can't cast obj (%T) to %T", obj, c))
-		}
-
-		cluster = c
-	}
-
 	tmpl, err := template.ParseFS(templatesFS, "templates/kubeadm_controlplane_azure.yaml.tmpl")
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	baseDomain, err := getInstallationBaseDomainFromAPIEndpoint(cluster.Spec.ControlPlaneEndpoint.Host)
+	baseDomain, err := getInstallationBaseDomainFromAPIEndpoint(m.crs.azureCluster.Spec.ControlPlaneEndpoint.Host)
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	vnet, err := m.getVNETCIDR(cluster)
+	vnet, err := m.getVNETCIDR()
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	releaseComponents, err := m.getReleaseComponents(ctx, cluster.GetLabels()[label.ReleaseVersion])
+	releaseComponents, err := m.getReleaseComponents(ctx, m.crs.azureCluster.GetLabels()[label.ReleaseVersion])
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -321,7 +293,7 @@ func (m *azureMigrator) readEncryptionSecret(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	m.crs[EncryptionSecret] = obj
+	m.crs.encryptionSecret = obj
 
 	return nil
 }
@@ -343,7 +315,7 @@ func (m *azureMigrator) readAzureConfig(ctx context.Context) error {
 	}
 
 	obj := objList.Items[0]
-	m.crs[obj.Kind] = &obj
+	m.crs.azureConfig = &obj
 
 	return nil
 }
@@ -365,7 +337,7 @@ func (m *azureMigrator) readCluster(ctx context.Context) error {
 	}
 
 	obj := objList.Items[0]
-	m.crs[obj.Kind] = &obj
+	m.crs.cluster = &obj
 
 	return nil
 }
@@ -387,7 +359,7 @@ func (m *azureMigrator) readAzureCluster(ctx context.Context) error {
 	}
 
 	obj := objList.Items[0]
-	m.crs[obj.Kind] = &obj
+	m.crs.azureCluster = &obj
 
 	return nil
 }
@@ -400,7 +372,7 @@ func (m *azureMigrator) readMachinePools(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	m.crs[objList.Kind] = objList
+	m.crs.machinePools = objList.Items
 
 	return nil
 }
@@ -413,17 +385,17 @@ func (m *azureMigrator) readAzureMachinePools(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	m.crs[objList.Kind] = objList
+	m.crs.azureMachinePools = objList.Items
 
 	return nil
 }
 
-func (m *azureMigrator) getVNETCIDR(cluster *capz.AzureCluster) (*net.IPNet, error) {
-	if len(cluster.Spec.NetworkSpec.Vnet.CIDRBlocks) == 0 {
-		return nil, microerror.Mask(fmt.Errorf("VNET CIDR not found for %q", cluster.Name))
+func (m *azureMigrator) getVNETCIDR() (*net.IPNet, error) {
+	if len(m.crs.azureCluster.Spec.NetworkSpec.Vnet.CIDRBlocks) == 0 {
+		return nil, microerror.Mask(fmt.Errorf("VNET CIDR not found for %q", m.clusterID))
 	}
 
-	_, n, err := net.ParseCIDR(cluster.Spec.NetworkSpec.Vnet.CIDRBlocks[0])
+	_, n, err := net.ParseCIDR(m.crs.azureCluster.Spec.NetworkSpec.Vnet.CIDRBlocks[0])
 	if err != nil {
 		return nil, microerror.Mask(err)
 	}

@@ -4,13 +4,18 @@ import (
 	"context"
 	"fmt"
 
+	provider "github.com/giantswarm/apiextensions/v3/pkg/apis/provider/v1alpha1"
 	"github.com/giantswarm/k8sclient/v4/pkg/k8sclient"
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
 	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
-	"k8s.io/apimachinery/pkg/runtime"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
+	capz "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
+	capzexp "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/api/v1alpha3"
+	capi "sigs.k8s.io/cluster-api/api/v1alpha3"
+	capiexp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -25,10 +30,21 @@ type azureMigratorFactory struct {
 	config AzureMigrationConfig
 }
 
+type azureCRs struct {
+	encryptionSecret *corev1.Secret
+	azureConfig      *provider.AzureConfig
+
+	cluster      *capi.Cluster
+	azureCluster *capz.AzureCluster
+
+	machinePools      []capiexp.MachinePool
+	azureMachinePools []capzexp.AzureMachinePool
+}
+
 type azureMigrator struct {
 	clusterID string
 
-	crs map[string]runtime.Object
+	crs azureCRs
 
 	// Migration configuration, dependencies + intermediate cache for involved
 	// CRs.
