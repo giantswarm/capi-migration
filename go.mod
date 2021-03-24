@@ -4,6 +4,10 @@ go 1.16
 
 require (
 	github.com/giantswarm/apiextensions/v3 v3.22.0
+	github.com/Azure/azure-sdk-for-go v52.5.0+incompatible
+	github.com/Azure/go-autorest/autorest/azure/auth v0.5.7
+	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
+	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/giantswarm/certs/v3 v3.0.0
 	github.com/giantswarm/k8sclient/v4 v4.0.0
 	github.com/giantswarm/microerror v0.3.0
