@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"html/template"
 	"net"
 	"strings"
+	"text/template"
 
 	provider "github.com/giantswarm/apiextensions/v3/pkg/apis/provider/v1alpha1"
 	release "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
