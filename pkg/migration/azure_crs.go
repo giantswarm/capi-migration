@@ -5,8 +5,12 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"net"
+	"strings"
 
+	"github.com/giantswarm/apiextensions/pkg/label"
 	provider "github.com/giantswarm/apiextensions/v3/pkg/apis/provider/v1alpha1"
+	release "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
 	"github.com/giantswarm/microerror"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -105,7 +109,37 @@ metricsBindAddress: 0.0.0.0:10249`
 }
 
 func (m *azureMigrator) createKubeadmControlPlane(ctx context.Context) error {
+	var cluster *capz.AzureCluster
+	{
+		obj, found := m.crs["AzureCluster"]
+		if !found {
+			return microerror.Mask(fmt.Errorf("AzureCluster not found"))
+		}
+
+		c, ok := obj.(*capz.AzureCluster)
+		if !ok {
+			return microerror.Mask(fmt.Errorf("can't cast obj (%T) to %T", obj, c))
+		}
+
+		cluster = c
+	}
+
 	tmpl, err := template.ParseFS(templatesFS, "templates/kubeadm_controlplane_azure.yaml.tmpl")
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	baseDomain, err := getInstallationBaseDomainFromAPIEndpoint(cluster.Spec.ControlPlaneEndpoint.Host)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	vnet, err := m.getVNETCIDR(cluster)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	releaseComponents, err := m.getReleaseComponents(cluster.GetLabels()[label.ReleaseVersion])
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -119,11 +153,11 @@ func (m *azureMigrator) createKubeadmControlPlane(ctx context.Context) error {
 		InstallationBaseDomain string
 	}{
 		ClusterID:              m.clusterID,
-		ClusterCIDR:            "10.2.0.0/16",
-		ClusterMasterIP:        "10.2.0.4",
-		EtcdVersion:            "v3.4.13",
-		K8sVersion:             "v1.19.9",
-		InstallationBaseDomain: "gremlin.germanywestcentral.azure.gigantic.io",
+		ClusterCIDR:            vnet.String(),
+		ClusterMasterIP:        getMasterIPForVNet(vnet).String(),
+		EtcdVersion:            releaseComponents["etcd"],
+		K8sVersion:             releaseComponents["kubernetes"],
+		InstallationBaseDomain: baseDomain,
 	}
 
 	buf := bytes.NewBuffer(nil)
@@ -389,4 +423,54 @@ func (m *azureMigrator) readAzureMachinePools(ctx context.Context) error {
 	m.crs[objList.Kind] = objList
 
 	return nil
+}
+
+func (m *azureMigrator) getVNETCIDR(cluster *capz.AzureCluster) (*net.IPNet, error) {
+	if len(cluster.Spec.NetworkSpec.Vnet.CIDRBlocks) == 0 {
+		return nil, microerror.Mask(fmt.Errorf("VNET CIDR not found for %q", cluster.Name))
+	}
+
+	_, n, err := net.ParseCIDR(cluster.Spec.NetworkSpec.Vnet.CIDRBlocks)
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+
+	return n, nil
+}
+
+func (m *azureMigrator) getReleaseComponents(ver string) (map[string]string, error) {
+	ver = strings.TrimPrefix(ver, "v")
+	r := &release.Release{}
+	err := m.mcCtrlClient.Get(ctx, ver, r)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	components := make(map[string]string)
+	for _, c := range r.Spec.Components {
+		components[c.Name] = c.Version
+	}
+
+	return components, nil
+}
+func getInstallationBaseDomainFromAPIEndpoint(apiEndpoint string) (string, error) {
+	labels := strings.Split(apiEndpoint, ".")
+
+	for i, l := range labels {
+		if l == "k8s" {
+			return strings.Join(labels[i+1:], "."), nil
+		}
+	}
+
+	return nil, microerror.Mask(fmt.Errorf("can't find domain label 'k8s' from ControlPlaneEndpoint.Host"))
+}
+
+func getMasterIPForVNet(vnet *net.IPNet) net.IP {
+	ip := vnet.IP.To4()
+	if ip == nil {
+		// We don't have IPv6. This is fine. Makes API more convenient.
+		panic("VNET CIDR is IPv6")
+	}
+
+	return net.IPv4(ip[0], ip[1], ip[2], ip[3]+4)
 }
