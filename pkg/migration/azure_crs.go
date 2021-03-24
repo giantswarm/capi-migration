@@ -389,9 +389,8 @@ func (m *azureMigrator) readAzureMachinePools(ctx context.Context) error {
 func (m *azureMigrator) updateCluster(ctx context.Context) error {
 	cluster := m.crs.cluster
 
-	// Drop operator version labels.
+	// Drop operator version label.
 	delete(cluster.Labels, label.AzureOperatorVersion)
-	delete(cluster.Labels, label.ClusterOperatorVersion)
 
 	// Drop finalizers.
 	cluster.Finalizers = nil
@@ -418,9 +417,8 @@ func (m *azureMigrator) updateCluster(ctx context.Context) error {
 func (m *azureMigrator) updateAzureCluster(ctx context.Context) error {
 	cluster := m.crs.azureCluster
 
-	// Drop operator version labels.
+	// Drop operator version label.
 	delete(cluster.Labels, label.AzureOperatorVersion)
-	delete(cluster.Labels, label.ClusterOperatorVersion)
 
 	// Drop finalizers.
 	cluster.Finalizers = nil
