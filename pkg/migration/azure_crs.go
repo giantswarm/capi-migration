@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/Azure/go-autorest/autorest/to"
 	provider "github.com/giantswarm/apiextensions/v3/pkg/apis/provider/v1alpha1"
 	release "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
 	"github.com/giantswarm/apiextensions/v3/pkg/label"
@@ -143,6 +144,9 @@ func (m *azureMigrator) createKubeadmControlPlane(ctx context.Context) error {
 	} else if err != nil {
 		return microerror.Mask(err)
 	}
+
+	// Store control plane CR for later referencing into Cluster CR.
+	m.crs.kubeadmControlPlane = kcp
 
 	return nil
 }
@@ -382,6 +386,160 @@ func (m *azureMigrator) readAzureMachinePools(ctx context.Context) error {
 	return nil
 }
 
+func (m *azureMigrator) updateCluster(ctx context.Context) error {
+	cluster := m.crs.cluster
+
+	// Drop operator version labels.
+	delete(cluster.Labels, label.AzureOperatorVersion)
+	delete(cluster.Labels, label.ClusterOperatorVersion)
+
+	// Drop finalizers.
+	cluster.Finalizers = nil
+
+	// Adjust k8s apiserver bind port to match kubeadm.
+	if cluster.Spec.ClusterNetwork != nil && cluster.Spec.ClusterNetwork.APIServerPort != nil {
+		cluster.Spec.ClusterNetwork.APIServerPort = to.Int32Ptr(6443)
+	}
+
+	cluster.Spec.ControlPlaneRef = &corev1.ObjectReference{
+		APIVersion: m.crs.kubeadmControlPlane.APIVersion,
+		Kind:       m.crs.kubeadmControlPlane.Kind,
+		Name:       m.crs.kubeadmControlPlane.Name,
+	}
+
+	err := m.mcCtrlClient.Update(ctx, cluster)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	return nil
+}
+
+func (m *azureMigrator) updateAzureCluster(ctx context.Context) error {
+	cluster := m.crs.azureCluster
+
+	// Drop operator version labels.
+	delete(cluster.Labels, label.AzureOperatorVersion)
+	delete(cluster.Labels, label.ClusterOperatorVersion)
+
+	// Drop finalizers.
+	cluster.Finalizers = nil
+
+	// Use default credentials.
+	cluster.Spec.IdentityRef = nil
+
+	if cluster.Spec.NetworkSpec.APIServerLB.Name == "" {
+		cluster.Spec.NetworkSpec.APIServerLB = capz.LoadBalancerSpec{
+			Name: fmt.Sprintf("%s-%s-%s", cluster.Name, "API", "PublicLoadBalancer"),
+			SKU:  "Standard",
+			Type: "Public",
+			FrontendIPs: []capz.FrontendIP{
+				{
+					Name: fmt.Sprintf("%s-%s-%s-%s", cluster.Name, "API", "PublicLoadBalancer", "Frontend"),
+					PublicIP: &capz.PublicIPSpec{
+						Name: fmt.Sprintf("%s-%s-%s-%s", cluster.Name, "API", "PublicLoadBalancer", "PublicIP"),
+					},
+				},
+			},
+		}
+	}
+
+	// START OF UGLY HACK **************************************************
+	// XXX: This is just a shortcut to make testing ergonomics better. Final
+	// code should be rewritten.
+	if len(cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs) == 0 {
+		ip := capz.FrontendIP{
+			Name: fmt.Sprintf("%s-%s-%s-%s", cluster.Name, "API", "PublicLoadBalancer", "Frontend"),
+			PublicIP: &capz.PublicIPSpec{
+				Name: fmt.Sprintf("%s-%s-%s-%s", cluster.Name, "API", "PublicLoadBalancer", "PublicIP"),
+			},
+		}
+
+		cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs = append(cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs, ip)
+	}
+
+	if cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs[0].PublicIP == nil {
+		cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs[0].PublicIP = &capz.PublicIPSpec{
+			Name: fmt.Sprintf("%s-%s-%s-%s", cluster.Name, "API", "PublicLoadBalancer", "PublicIP"),
+		}
+	}
+
+	if cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs[0].PublicIP.Name == "" {
+		cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs[0].PublicIP.Name = fmt.Sprintf("%s-%s-%s-%s", cluster.Name, "API", "PublicLoadBalancer", "PublicIP")
+	}
+	// END OF UGLY HACK **************************************************
+
+	var masterSubnetFound, workerSubnetFound bool
+	for _, snet := range cluster.Spec.NetworkSpec.Subnets {
+		if strings.HasSuffix(snet.Name, "VirtualNetwork-MasterSubnet") {
+			masterSubnetFound = true
+		}
+		if strings.HasSuffix(snet.Name, "VirtualNetwork-WorkerSubnet") {
+			workerSubnetFound = true
+		}
+	}
+
+	if !masterSubnetFound && !workerSubnetFound && len(cluster.Spec.NetworkSpec.Subnets) > 0 {
+		// When there's no pre-built master nor legacy worker subnet, but the
+		// subnet array still has items, it means there are node pool subnets
+		// for worker nodes and hence there's no need to inject legacy worker
+		// subnet.
+		workerSubnetFound = true
+	}
+
+	_, vnet, err := net.ParseCIDR(cluster.Spec.NetworkSpec.Vnet.CIDRBlocks[0])
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	if !masterSubnetFound {
+		masterSubnetCIDR := &net.IPNet{
+			IP:   vnet.IP,
+			Mask: net.IPv4Mask(255, 255, 255, 0),
+		}
+
+		s := &capz.SubnetSpec{
+			Name: fmt.Sprintf("%s-VirtualNetwork-MasterSubnet", cluster.Name),
+			CIDRBlocks: []string{
+				masterSubnetCIDR.String(),
+			},
+			Role: capz.SubnetControlPlane,
+		}
+
+		cluster.Spec.NetworkSpec.Subnets = append(cluster.Spec.NetworkSpec.Subnets, s)
+	}
+
+	if !workerSubnetFound {
+		n := vnet.IP.To4()
+		if n == nil {
+			return microerror.Mask(fmt.Errorf("VNET CIDR %q is not an IPv4 address", cluster.Spec.NetworkSpec.Vnet.CIDRBlocks[0]))
+		}
+
+		// Bump up third octet by one to get first worker subnet.
+		workerIP := net.IPv4(n[0], n[1], n[2]+1, n[3])
+		workerSubnetCIDR := &net.IPNet{
+			IP:   workerIP,
+			Mask: net.IPv4Mask(255, 255, 255, 0),
+		}
+		s := &capz.SubnetSpec{
+			Name: fmt.Sprintf("%s-VirtualNetwork-WorkerSubnet", cluster.Name),
+			CIDRBlocks: []string{
+				workerSubnetCIDR.String(),
+			},
+			Role: capz.SubnetNode,
+		}
+
+		cluster.Spec.NetworkSpec.Subnets = append(cluster.Spec.NetworkSpec.Subnets, s)
+	}
+
+	err = m.mcCtrlClient.Update(ctx, cluster)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	return nil
+}
+
 func (m *azureMigrator) getVNETCIDR() (*net.IPNet, error) {
 	if len(m.crs.azureCluster.Spec.NetworkSpec.Vnet.CIDRBlocks) == 0 {
 		return nil, microerror.Mask(fmt.Errorf("VNET CIDR not found for %q", m.clusterID))
@@ -410,6 +568,7 @@ func (m *azureMigrator) getReleaseComponents(ctx context.Context, ver string) (m
 
 	return components, nil
 }
+
 func getInstallationBaseDomainFromAPIEndpoint(apiEndpoint string) (string, error) {
 	labels := strings.Split(apiEndpoint, ".")
 

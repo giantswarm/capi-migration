@@ -3,6 +3,7 @@ module github.com/giantswarm/capi-migration
 go 1.16
 
 require (
+	github.com/Azure/go-autorest/autorest/to v0.4.0
 	github.com/giantswarm/apiextensions/v3 v3.22.0
 	github.com/giantswarm/certs/v3 v3.0.0
 	github.com/giantswarm/k8sclient/v4 v4.0.0

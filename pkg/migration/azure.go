@@ -15,6 +15,7 @@ import (
 	capzexp "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/api/v1alpha3"
 	capi "sigs.k8s.io/cluster-api/api/v1alpha3"
+	kubeadm "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
 	capiexp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -34,8 +35,9 @@ type azureCRs struct {
 	encryptionSecret *corev1.Secret
 	azureConfig      *provider.AzureConfig
 
-	cluster      *capi.Cluster
-	azureCluster *capz.AzureCluster
+	cluster             *capi.Cluster
+	azureCluster        *capz.AzureCluster
+	kubeadmControlPlane *kubeadm.KubeadmControlPlane
 
 	machinePools      []capiexp.MachinePool
 	azureMachinePools []capzexp.AzureMachinePool
@@ -230,6 +232,18 @@ func (m *azureMigrator) prepareMissingCRs(ctx context.Context) error {
 // updateCRs updates existing CRs such as Cluster and AzureCluster with
 // configuration that is compatible with upstream controllers.
 func (m *azureMigrator) updateCRs(ctx context.Context) error {
+	var err error
+
+	err = m.updateCluster(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.updateAzureCluster(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
 	return nil
 }
 
