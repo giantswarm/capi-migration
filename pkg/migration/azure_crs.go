@@ -144,20 +144,13 @@ func (m *azureMigrator) createKubeadmControlPlane(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	cfg := struct {
-		ClusterID              string
-		ClusterCIDR            string
-		ClusterMasterIP        string
-		EtcdVersion            string
-		K8sVersion             string
-		InstallationBaseDomain string
-	}{
-		ClusterID:              m.clusterID,
-		ClusterCIDR:            vnet.String(),
-		ClusterMasterIP:        getMasterIPForVNet(vnet).String(),
-		EtcdVersion:            releaseComponents["etcd"],
-		K8sVersion:             releaseComponents["kubernetes"],
-		InstallationBaseDomain: baseDomain,
+	cfg := map[string]string{
+		"ClusterID":              m.clusterID,
+		"ClusterCIDR":            vnet.String(),
+		"ClusterMasterIP":        getMasterIPForVNet(vnet).String(),
+		"EtcdVersion":            releaseComponents["etcd"],
+		"K8sVersion":             releaseComponents["kubernetes"],
+		"InstallationBaseDomain": baseDomain,
 	}
 
 	buf := bytes.NewBuffer(nil)
