@@ -112,10 +112,7 @@ func (m *azureMigrator) createKubeadmControlPlane(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	releaseComponents, err := m.getReleaseComponents(ctx, m.crs.azureCluster.GetLabels()[label.ReleaseVersion])
-	if err != nil {
-		return microerror.Mask(err)
-	}
+	releaseComponents := getReleaseComponents(m.crs.release)
 
 	cfg := map[string]string{
 		"ClusterID":              m.clusterID,
@@ -386,6 +383,19 @@ func (m *azureMigrator) readAzureMachinePools(ctx context.Context) error {
 	return nil
 }
 
+func (m *azureMigrator) readRelease(ctx context.Context, ver string) error {
+	ver = strings.TrimPrefix(ver, "v")
+	r := &release.Release{}
+	err := m.mcCtrlClient.Get(ctx, ctrl.ObjectKey{Name: ver}, r)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	m.crs.release = r
+
+	return nil
+}
+
 func (m *azureMigrator) updateCluster(ctx context.Context) error {
 	cluster := m.crs.cluster
 
@@ -551,20 +561,13 @@ func (m *azureMigrator) getVNETCIDR() (*net.IPNet, error) {
 	return n, nil
 }
 
-func (m *azureMigrator) getReleaseComponents(ctx context.Context, ver string) (map[string]string, error) {
-	ver = strings.TrimPrefix(ver, "v")
-	r := &release.Release{}
-	err := m.mcCtrlClient.Get(ctx, ctrl.ObjectKey{Name: ver}, r)
-	if err != nil {
-		return nil, microerror.Mask(err)
-	}
-
+func getReleaseComponents(r *release.Release) map[string]string {
 	components := make(map[string]string)
 	for _, c := range r.Spec.Components {
 		components[c.Name] = c.Version
 	}
 
-	return components, nil
+	return components
 }
 
 func getInstallationBaseDomainFromAPIEndpoint(apiEndpoint string) (string, error) {
