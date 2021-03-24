@@ -8,13 +8,15 @@ import (
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
 	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/cluster-api/api/v1alpha3"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrl "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type AzureMigrationConfig struct {
 	// Migration configuration + dependencies such as k8s client.
+	CtrlClient    ctrl.Client
 	Logger        micrologger.Logger
 	TenantCluster tenantcluster.Interface
 }
@@ -25,10 +27,14 @@ type azureMigratorFactory struct {
 
 type azureMigrator struct {
 	clusterID string
+
+	crs map[string]runtime.Object
+
 	// Migration configuration, dependencies + intermediate cache for involved
 	// CRs.
 	logger       micrologger.Logger
-	wcCtrlClient client.Client
+	mcCtrlClient ctrl.Client
+	wcCtrlClient ctrl.Client
 }
 
 func NewAzureMigratorFactory(cfg AzureMigrationConfig) (MigratorFactory, error) {
@@ -56,6 +62,7 @@ func (f *azureMigratorFactory) NewMigrator(cluster *v1alpha3.Cluster) (Migrator,
 		clusterID: cluster.Name,
 		// rest of the config from f.config...
 		logger:       f.config.Logger,
+		mcCtrlClient: f.config.CtrlClient,
 		wcCtrlClient: k8sClient.CtrlClient(),
 	}, nil
 }
@@ -125,6 +132,33 @@ func (m *azureMigrator) Cleanup(ctx context.Context) error {
 // - AzureMachinePools
 //
 func (m *azureMigrator) readCRs(ctx context.Context) error {
+	var err error
+
+	err = m.readAzureConfig(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readCluster(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readAzureCluster(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readMachinePools(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readAzureMachinePools(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
 	return nil
 }
 
