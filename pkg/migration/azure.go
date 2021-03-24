@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	provider "github.com/giantswarm/apiextensions/v3/pkg/apis/provider/v1alpha1"
+	release "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
+	"github.com/giantswarm/apiextensions/v3/pkg/label"
 	"github.com/giantswarm/k8sclient/v4/pkg/k8sclient"
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
@@ -33,6 +35,7 @@ type azureMigratorFactory struct {
 type azureCRs struct {
 	encryptionSecret *corev1.Secret
 	azureConfig      *provider.AzureConfig
+	release          *release.Release
 
 	cluster      *capi.Cluster
 	azureCluster *capz.AzureCluster
@@ -176,6 +179,12 @@ func (m *azureMigrator) readCRs(ctx context.Context) error {
 	}
 
 	err = m.readAzureMachinePools(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	releaseVer := m.crs.cluster.GetLabels()[label.ReleaseVersion]
+	err = m.readRelease(ctx, releaseVer)
 	if err != nil {
 		return microerror.Mask(err)
 	}
