@@ -8,9 +8,9 @@ import (
 	"net"
 	"strings"
 
-	"github.com/giantswarm/apiextensions/pkg/label"
 	provider "github.com/giantswarm/apiextensions/v3/pkg/apis/provider/v1alpha1"
 	release "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
+	"github.com/giantswarm/apiextensions/v3/pkg/label"
 	"github.com/giantswarm/microerror"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -139,7 +139,7 @@ func (m *azureMigrator) createKubeadmControlPlane(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	releaseComponents, err := m.getReleaseComponents(cluster.GetLabels()[label.ReleaseVersion])
+	releaseComponents, err := m.getReleaseComponents(ctx, cluster.GetLabels()[label.ReleaseVersion])
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -423,7 +423,7 @@ func (m *azureMigrator) getVNETCIDR(cluster *capz.AzureCluster) (*net.IPNet, err
 		return nil, microerror.Mask(fmt.Errorf("VNET CIDR not found for %q", cluster.Name))
 	}
 
-	_, n, err := net.ParseCIDR(cluster.Spec.NetworkSpec.Vnet.CIDRBlocks)
+	_, n, err := net.ParseCIDR(cluster.Spec.NetworkSpec.Vnet.CIDRBlocks[0])
 	if err != nil {
 		return nil, microerror.Mask(err)
 	}
@@ -431,12 +431,12 @@ func (m *azureMigrator) getVNETCIDR(cluster *capz.AzureCluster) (*net.IPNet, err
 	return n, nil
 }
 
-func (m *azureMigrator) getReleaseComponents(ver string) (map[string]string, error) {
+func (m *azureMigrator) getReleaseComponents(ctx context.Context, ver string) (map[string]string, error) {
 	ver = strings.TrimPrefix(ver, "v")
 	r := &release.Release{}
-	err := m.mcCtrlClient.Get(ctx, ver, r)
+	err := m.mcCtrlClient.Get(ctx, ctrl.ObjectKey{Name: ver}, r)
 	if err != nil {
-		return microerror.Mask(err)
+		return nil, microerror.Mask(err)
 	}
 
 	components := make(map[string]string)
@@ -455,7 +455,7 @@ func getInstallationBaseDomainFromAPIEndpoint(apiEndpoint string) (string, error
 		}
 	}
 
-	return nil, microerror.Mask(fmt.Errorf("can't find domain label 'k8s' from ControlPlaneEndpoint.Host"))
+	return "", microerror.Mask(fmt.Errorf("can't find domain label 'k8s' from ControlPlaneEndpoint.Host"))
 }
 
 func getMasterIPForVNet(vnet *net.IPNet) net.IP {
