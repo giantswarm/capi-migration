@@ -5,8 +5,20 @@ import (
 	"github.com/giantswarm/microerror"
 )
 
+var identityRefNotSetError = &microerror.Error{
+	Kind: "identityRefNotSetError",
+}
+
+var missingValueError = &microerror.Error{
+	Kind: "missingValueError",
+}
+
 var newMasterNotReadyError = &microerror.Error{
 	Kind: "newMasterNotReadyError",
+}
+
+var subscriptionIDNotSetError = &microerror.Error{
+	Kind: "subscriptionIDNotSetError",
 }
 
 var tooManyMastersError = &microerror.Error{

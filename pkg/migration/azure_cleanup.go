@@ -3,8 +3,6 @@ package migration
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
-	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/giantswarm/microerror"
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -26,25 +24,6 @@ func (m *azureMigrator) cleanup(ctx context.Context) error {
 	return nil
 }
 
-func (m *azureMigrator) getVMSSClient(ctx context.Context) (*compute.VirtualMachineScaleSetsClient, error) {
-	// TODO get service principal data from CRs
-	subscriptionID := ""
-	clientID := ""
-	clientSecret := ""
-	tenantID := ""
-
-	azureClient := compute.NewVirtualMachineScaleSetsClient(subscriptionID)
-	credentials := auth.NewClientCredentialsConfig(clientID, clientSecret, tenantID)
-	authorizer, err := credentials.Authorizer()
-	if err != nil {
-		return nil, microerror.Mask(err)
-	}
-
-	azureClient.Authorizer = authorizer
-
-	return &azureClient, nil
-}
-
 func (m *azureMigrator) ensureLegacyMastersAreDeleted(ctx context.Context) error {
 	// Ensure legacy masters VMSS exists or exit.
 	vmssName := key.AzureMasterVMSSName(m.clusterID)
@@ -61,23 +40,34 @@ func (m *azureMigrator) ensureLegacyMastersAreDeleted(ctx context.Context) error
 	}
 
 	// Check if the new master exists and is ready or wait.
-	nodes := v1.NodeList{}
-	// TODO set the right label filters
-	err = m.wcCtrlClient.List(ctx, &nodes, client.MatchingLabels{})
-	if err != nil {
-		return microerror.Mask(err)
-	}
+	{
+		nodes := v1.NodeList{}
+		err = m.wcCtrlClient.List(ctx, &nodes, client.MatchingLabels{"node-role.kubernetes.io/master": ""})
+		if err != nil {
+			return microerror.Mask(err)
+		}
 
-	if len(nodes.Items) == 0 {
-		return microerror.Maskf(newMasterNotReadyError, "New master node was not found")
-	}
+		// Filter out nodes having label "role=master".
+		var newMasters []v1.Node
+		for _, n := range nodes.Items {
+			if n.Labels["role"] == "master" {
+				// Legacy master node.
+			} else {
+				newMasters = append(newMasters, n)
+			}
+		}
 
-	if len(nodes.Items) > 1 {
-		return microerror.Maskf(tooManyMastersError, "Exactly one master node was expected to exists, %d found", len(nodes.Items))
-	}
+		if len(newMasters) == 0 {
+			return microerror.Maskf(newMasterNotReadyError, "New master node was not found")
+		}
 
-	if nodes.Items[0].Status.Phase != v1.NodeRunning {
-		return microerror.Maskf(newMasterNotReadyError, "Master node %q is not ready (%q)", nodes.Items[0].Name, nodes.Items[0].Status.Phase)
+		if len(newMasters) > 1 {
+			return microerror.Maskf(tooManyMastersError, "Exactly one master node was expected to exist, %d found", len(nodes.Items))
+		}
+
+		if nodes.Items[0].Status.Phase != v1.NodeRunning {
+			return microerror.Maskf(newMasterNotReadyError, "Master node %q is not ready (%q)", nodes.Items[0].Name, nodes.Items[0].Status.Phase)
+		}
 	}
 
 	m.logger.Debugf(ctx, "Deleting VMSS %q from resource group %q", vmssName, m.clusterID)
