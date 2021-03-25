@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/Azure/go-autorest/autorest/to v0.4.0
+	github.com/giantswarm/apiextensions v0.4.20
 	github.com/giantswarm/apiextensions/v3 v3.22.0
 	github.com/giantswarm/certs/v3 v3.0.0
 	github.com/giantswarm/k8sclient/v4 v4.0.0
@@ -16,6 +17,7 @@ require (
 	k8s.io/apimachinery v0.18.9
 	k8s.io/client-go v0.18.9
 	sigs.k8s.io/cluster-api v0.3.13
+	sigs.k8s.io/cluster-api-provider-aws v0.6.4
 	sigs.k8s.io/cluster-api-provider-azure v0.0.0
 	sigs.k8s.io/controller-runtime v0.6.3
 	sigs.k8s.io/yaml v1.2.0

@@ -56,11 +56,14 @@ func init() {
 var flags = struct {
 	EnableLeaderElection bool
 	MetricsAddr          string
+	Provider             string
 }{}
 
 func initFlags() {
 	flag.BoolVar(&flags.EnableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
 	flag.StringVar(&flags.MetricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&flags.Provider, "provider", "azure", "Provider name for the migration.")
+
 	flag.Parse()
 
 	var errors []string
@@ -140,22 +143,36 @@ func mainE(ctx context.Context) error {
 		}
 	}
 
-	var azureMigratorFactory migration.MigratorFactory
+	var migratorFactory migration.MigratorFactory
 	{
-		azureMigratorFactory, err = migration.NewAzureMigratorFactory(migration.AzureMigrationConfig{
-			CtrlClient:    mgr.GetClient(),
-			Logger:        log,
-			TenantCluster: tenantCluster,
-		})
-		if err != nil {
-			return microerror.Mask(err)
+		if flags.Provider == "aws" {
+			migratorFactory, err = migration.NewAzureMigratorFactory(migration.AzureMigrationConfig{
+				CtrlClient:    mgr.GetClient(),
+				Logger:        log,
+				TenantCluster: tenantCluster,
+			})
+			if err != nil {
+				return microerror.Mask(err)
+			}
+		} else if flags.Provider == "azure" {
+			migratorFactory, err = migration.NewAzureMigratorFactory(migration.AzureMigrationConfig{
+				CtrlClient:    mgr.GetClient(),
+				Logger:        log,
+				TenantCluster: tenantCluster,
+			})
+			if err != nil {
+				return microerror.Mask(err)
+			}
+		} else {
+			return microerror.Maskf(&microerror.Error{Kind: "invalid provider"}, "provider '%s' is unknown or it is not implemented", flags.Provider)
 		}
+
 	}
 
 	if err = (&controllers.ClusterReconciler{
 		Client:          mgr.GetClient(),
 		Log:             log,
-		MigratorFactory: azureMigratorFactory,
+		MigratorFactory: migratorFactory,
 		Scheme:          mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		return microerror.Mask(err)
