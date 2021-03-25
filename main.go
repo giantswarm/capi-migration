@@ -146,16 +146,17 @@ func mainE(ctx context.Context) error {
 	var migratorFactory migration.MigratorFactory
 	{
 		if flags.Provider == "aws" {
-			migratorFactory, err = migration.NewAzureMigratorFactory(migration.AzureMigrationConfig{
+			migratorFactory, err = migration.NewAWSMigratorFactory(migration.AWSMigrationConfig{
 				CtrlClient:    mgr.GetClient(),
 				Logger:        log,
 				TenantCluster: tenantCluster,
 			})
+
 			if err != nil {
 				return microerror.Mask(err)
 			}
 		} else if flags.Provider == "azure" {
-			migratorFactory, err = migration.NewAWSMigratorFactory(migration.AWSMigrationConfig{
+			migratorFactory, err = migration.NewAzureMigratorFactory(migration.AzureMigrationConfig{
 				CtrlClient:    mgr.GetClient(),
 				Logger:        log,
 				TenantCluster: tenantCluster,
