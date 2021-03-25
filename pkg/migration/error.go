@@ -17,6 +17,10 @@ var newMasterNotReadyError = &microerror.Error{
 	Kind: "newMasterNotReadyError",
 }
 
+var newWorkersNotReady = &microerror.Error{
+	Kind: "newWorkersNotReady",
+}
+
 var subscriptionIDNotSetError = &microerror.Error{
 	Kind: "subscriptionIDNotSetError",
 }
