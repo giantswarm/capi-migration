@@ -24,11 +24,11 @@ import (
 	"time"
 
 	"github.com/giantswarm/certs/v3/pkg/certs"
+	"github.com/giantswarm/k8sclient/v4/pkg/k8sclient"
 	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -146,13 +146,16 @@ func mainE(ctx context.Context) error {
 
 	var certsSearcher *certs.Searcher
 	{
-		client, err := kubernetes.NewForConfig(mgr.GetConfig())
+		clients, err := k8sclient.NewClients(k8sclient.ClientsConfig{
+			Logger:     log,
+			RestConfig: mgr.GetConfig(),
+		})
 		if err != nil {
 			return microerror.Mask(err)
 		}
 
 		c := certs.Config{
-			K8sClient: client,
+			K8sClient: clients.K8sClient(),
 			Logger:    log,
 
 			WatchTimeout: 30 * time.Second,
