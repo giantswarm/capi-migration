@@ -4,7 +4,7 @@ metricsBindAddress: ":8080"
 # Generic configuration.
 
 image:
-  name: "giantswarm/aws-operator"
+  name: "giantswarm/capi-migration"
   tag: "[[ .Version ]]"
 project:
   branch: "[[ .Branch ]]"
