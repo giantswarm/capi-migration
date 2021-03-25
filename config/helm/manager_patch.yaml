@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          args:
+            - --config=/var/run/controller-manager/config.yaml
+            - --config=/var/run/controller-manager/secret.yaml
+          volumeMounts:
+            - name: controller-manager-cm
+              mountPath: /var/run/controller-manager/config.yaml
+              readOnly: true
+            - name: controller-manager-secret
+              mountPath: /var/run/controller-manager/secret.yaml
+              readOnly: true
+      volumes:
+        - name: controller-manager-cm
+          configMap:
+            name: controller-manager
+        - name: controller-manager-secret
+          secret:
+            secretName: controller-manager

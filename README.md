@@ -2,6 +2,9 @@
 
 # capi-migration
 
+- [Migration process outline](#migration-process-outline)
+- [Development](#development)
+
 ## Migration process outline
 
 ### Preparation Phase
@@ -32,3 +35,19 @@
  * worker nodes still have `useManagedIdentity` set to `false` despite the `AzureMachineTemplate` having it set to `SystemAssigned`  (this is likely the cause for external-dns crash listed above)
  * PVC are not being provisioned
  * Load balancer has issues (might be related to https://github.com/kubernetes-sigs/cloud-provider-azure/issues/363)
+
+## Development
+
+### Helm chart
+
+The helm chart templates are generated using kustomize overlay stored in
+`/config/helm`. To re-generate templates run `make manifests`.
+
+To add a new configuration value:
+
+1. Add a new flag in `main.go`. Bind the flag and bind the flag value.
+2. Add a new key (with the name equal to the new flag name) to either
+   `config/helm/config.yaml` or `config/helm/secret.yaml`.
+3. Add a new key in `helm/*/values.yaml` that is used as a value for the key in
+   CM/Secret.
+4. Regenerate templates using `make manifests`.
