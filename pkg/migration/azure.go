@@ -17,6 +17,7 @@ import (
 	capzexp "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/api/v1alpha3"
 	capi "sigs.k8s.io/cluster-api/api/v1alpha3"
+	cabpkv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
 	kubeadm "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
 	capiexp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,9 +39,14 @@ type azureCRs struct {
 	azureConfig      *provider.AzureConfig
 	release          *release.Release
 
-	cluster             *capi.Cluster
-	azureCluster        *capz.AzureCluster
-	kubeadmControlPlane *kubeadm.KubeadmControlPlane
+	cluster                    *capi.Cluster
+	azureCluster               *capz.AzureCluster
+	kubeadmControlPlane        *kubeadm.KubeadmControlPlane
+	masterAzureMachineTemplate *capz.AzureMachineTemplate
+
+	workersKubeadmConfigTemplate *cabpkv1.KubeadmConfigTemplate
+	workersAzureMachineTemplate  *capz.AzureMachineTemplate
+	workersMachineDeployment     *capi.MachineDeployment
 
 	machinePools      []capiexp.MachinePool
 	azureMachinePools []capzexp.AzureMachinePool
@@ -259,5 +265,67 @@ func (m *azureMigrator) updateCRs(ctx context.Context) error {
 // triggerMigration executes the last missing updates on CRs so that
 // reconciliation transistions to upstream controllers.
 func (m *azureMigrator) triggerMigration(ctx context.Context) error {
+	releaseComponents := getReleaseComponents(m.crs.release)
+
+	{
+		m.crs.cluster.Labels[label.ClusterOperatorVersion] = releaseComponents["cluster-operator"]
+		m.crs.cluster.Labels["cluster.x-k8s.io/watch-filter"] = releaseComponents["cluster-api-core"]
+		err := m.mcCtrlClient.Update(ctx, m.crs.cluster)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
+
+	{
+		m.crs.workersMachineDeployment.Labels[label.ClusterOperatorVersion] = releaseComponents["cluster-operator"]
+		m.crs.workersMachineDeployment.Labels["cluster.x-k8s.io/watch-filter"] = releaseComponents["cluster-api-core"]
+		err := m.mcCtrlClient.Update(ctx, m.crs.workersMachineDeployment)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
+
+	{
+		m.crs.masterAzureMachineTemplate.Labels["cluster.x-k8s.io/watch-filter"] = releaseComponents["cluster-api-provider-azure"]
+		err := m.mcCtrlClient.Update(ctx, m.crs.masterAzureMachineTemplate)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
+
+	{
+		m.crs.workersAzureMachineTemplate.Labels["cluster.x-k8s.io/watch-filter"] = releaseComponents["cluster-api-provider-azure"]
+		err := m.mcCtrlClient.Update(ctx, m.crs.workersAzureMachineTemplate)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
+
+	{
+		m.crs.kubeadmControlPlane.Labels["cluster.x-k8s.io/watch-filter"] = releaseComponents["cluster-api-control-plane"]
+		m.crs.kubeadmControlPlane.Labels[label.ReleaseVersion] = m.crs.release.Name
+		err := m.mcCtrlClient.Update(ctx, m.crs.kubeadmControlPlane)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
+
+	{
+		m.crs.workersKubeadmConfigTemplate.Labels["cluster.x-k8s.io/watch-filter"] = releaseComponents["cluster-api-bootstrap-provider-kubeadm"]
+		m.crs.workersKubeadmConfigTemplate.Labels[label.ReleaseVersion] = m.crs.release.Name
+		err := m.mcCtrlClient.Update(ctx, m.crs.workersKubeadmConfigTemplate)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
+	{
+		m.crs.azureCluster.Labels["cluster.x-k8s.io/watch-filter"] = releaseComponents["cluster-api-provider-azure"]
+		m.crs.azureCluster.Labels[label.ReleaseVersion] = m.crs.release.Name
+		err := m.mcCtrlClient.Update(ctx, m.crs.azureCluster)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
+
 	return nil
 }
