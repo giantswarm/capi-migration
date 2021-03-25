@@ -11,8 +11,6 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-all: manager
-
 # Run tests
 test: generate fmt vet manifests
 	go test ./... -coverprofile cover.out
@@ -31,14 +29,6 @@ run-aws: generate fmt vet manifests
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run-azure: generate fmt vet manifests
 	go run ./main.go --provider=azure
-
-# Install CRDs into a cluster
-install: manifests
-	kustomize build config/crd | kubectl apply -f -
-
-# Uninstall CRDs from a cluster
-uninstall: manifests
-	kustomize build config/crd | kubectl delete -f -
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy:
