@@ -384,7 +384,9 @@ func (m *azureMigrator) readAzureMachinePools(ctx context.Context) error {
 }
 
 func (m *azureMigrator) readRelease(ctx context.Context, ver string) error {
+	// Ensure the release name starts with a "v"
 	ver = strings.TrimPrefix(ver, "v")
+	ver = fmt.Sprintf("v%s", ver)
 	r := &release.Release{}
 	err := m.mcCtrlClient.Get(ctx, ctrl.ObjectKey{Name: ver}, r)
 	if err != nil {
