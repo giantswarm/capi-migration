@@ -21,15 +21,15 @@ test: generate fmt vet manifests
 manager: generate fmt vet
 	go build -o bin/manager main.go
 
-# Run against the configured Kubernetes cluster in ~/.kube/config
-run-azure: generate fmt vet manifests
-	go run ./main.go --provider=azure
+run:
+	@echo "Deprecated: use \"make run-aws\" or \"make run-azure\"" >&2 && exit 1
 
+# Run against the configured Kubernetes cluster in ~/.kube/config
 run-aws: generate fmt vet manifests
 	go run ./main.go --provider=aws
 
-run: generate fmt vet manifests
-	@echo "Deprecated: use 'make run-azure or make run-aws'"
+# Run against the configured Kubernetes cluster in ~/.kube/config
+run-azure: generate fmt vet manifests
 	go run ./main.go --provider=azure
 
 # Install CRDs into a cluster
@@ -41,13 +41,28 @@ uninstall: manifests
 	kustomize build config/crd | kubectl delete -f -
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy: manifests
+deploy:
+	@echo "Deprecated: use \"make deploy-aws\" or \"make deploy-azure\"" >&2 && exit 1
+
+# Deploy controller in the configured Kubernetes cluster in ~/.kube/config
+deploy-aws: manifests
 	cd config/dev && kustomize edit set image controller=${IMG}
-	kustomize build config/dev | kubectl apply -f -
+	kustomize build config/dev-aws | kubectl apply -f -
+
+deploy-azure: manifests
+	cd config/dev && kustomize edit set image controller=${IMG}
+	kustomize build config/dev-azure | kubectl apply -f -
+
+undeploy:
+	@echo "Deprecated: use \"make undeploy-aws\" or \"make undeploy-azure\"" >&2 && exit 1
 
 # Undeploy controller in the configured Kubernetes cluster in ~/.kube/config
-undeploy: manifests
-	kustomize build config/dev | kubectl delete -f -
+undeploy-aws: manifests
+	kustomize build config/dev-aws | kubectl delete -f -
+
+# Undeploy controller in the configured Kubernetes cluster in ~/.kube/config
+undeploy-azure: manifests
+	kustomize build config/dev-azure | kubectl delete -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: CHART_TEMPLATE_FILE := $(shell ls -d helm/$$(basename $$(go list -m)))/templates/kustomize-out.yaml
