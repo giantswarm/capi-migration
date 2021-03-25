@@ -450,7 +450,7 @@ func (m *azureMigrator) updateAzureCluster(ctx context.Context) error {
 	}
 
 	if len(cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs) == 0 {
-		cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs = append(cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs, ip)
+		cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs = append(cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs, capz.FrontendIP{})
 	}
 
 	if cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs[0].PublicIP == nil {
