@@ -155,7 +155,7 @@ func mainE(ctx context.Context) error {
 				return microerror.Mask(err)
 			}
 		} else if flags.Provider == "azure" {
-			migratorFactory, err = migration.NewAzureMigratorFactory(migration.AzureMigrationConfig{
+			migratorFactory, err = migration.NewAWSMigratorFactory(migration.AWSMigrationConfig{
 				CtrlClient:    mgr.GetClient(),
 				Logger:        log,
 				TenantCluster: tenantCluster,
