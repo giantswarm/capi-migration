@@ -1,0 +1,44 @@
+namespace: '{{ .Release.Namespace }}'
+namePrefix: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-'
+
+commonAnnotations:
+  meta.helm.sh/release-name: '{{ .Release.Name }}'
+  meta.helm.sh/release-namespace: '{{ .Release.Namespace }}'
+
+commonLabels:
+  app.giantswarm.io/branch: '{{ .Values.project.branch }}'
+  app.giantswarm.io/commit: '{{ .Values.project.commit }}'
+  app.kubernetes.io/managed-by: '{{ .Release.Service }}'
+  app.kubernetes.io/version: '{{ .Chart.AppVersion }}'
+  helm.sh/chart: '{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}'
+  app.kubernetes.io/name: '{{ .Chart.Name | trunc 63 | trimSuffix "-" }}'
+  app.kubernetes.io/instance: '{{ .Release.Name }}'
+
+images:
+  - name: controller
+    newName: "{{ .Values.registry.domain }}/{{ .Values.image.name }}"
+    newTag: "{{ .Values.image.tag }}"
+
+bases:
+  - ../giantswarm
+
+resources:
+  - manager_config_map.yaml
+  - manager_secret.yaml
+
+patchesStrategicMerge:
+  - manager_patch.yaml
+
+configMapGenerator:
+  - name: controller-manager
+    namespace: system
+    behavior: replace
+    files:
+      - config.yaml
+
+secretGenerator:
+  - name: controller-manager
+    namespace: system
+    behavior: replace
+    files:
+      - secret.yaml
