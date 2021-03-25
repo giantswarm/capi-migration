@@ -62,7 +62,7 @@ var flags = struct {
 func initFlags() {
 	flag.BoolVar(&flags.EnableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
 	flag.StringVar(&flags.MetricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&flags.Provider, "provider", "azure", "Provider name for the migration.")
+	flag.StringVar(&flags.Provider, "provider", "", "Provider name for the migration.")
 
 	flag.Parse()
 
@@ -73,6 +73,9 @@ func initFlags() {
 	//if flags.MyFlag == "" {
 	//	errors = append(errors, "--my-flag must be not empty")
 	//}
+	if flags.Provider == "" {
+		errors = append(errors, "--provider must be not empty")
+	}
 
 	if len(errors) > 1 {
 		fmt.Fprintf(os.Stderr, "%s\n", strings.Join(errors, "\n"))
