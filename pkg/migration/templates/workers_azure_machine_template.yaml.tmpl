@@ -1,0 +1,19 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: AzureMachineTemplate
+metadata:
+  name: {{.ClusterID}}-md-0
+  namespace: default
+spec:
+  template:
+    spec:
+      enableIPForwarding: true
+      identity: SystemAssigned
+      location: germanywestcentral
+      osDisk:
+        diskSizeGB: 128
+        managedDisk:
+          storageAccountType: Premium_LRS
+        osType: Linux
+      sshPublicKey: ""
+      vmSize: Standard_D4s_v3
+
