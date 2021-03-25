@@ -1,5 +1,6 @@
 leaderElect: false
 metricsBindAddress: ":8080"
+provider: ""
 
 # Generic configuration.
 

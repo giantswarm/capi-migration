@@ -22,8 +22,15 @@ manager: generate fmt vet
 	go build -o bin/manager main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
+run-azure: generate fmt vet manifests
+	go run ./main.go --provider=azure
+
+run-aws: generate fmt vet manifests
+	go run ./main.go --provider=aws
+
 run: generate fmt vet manifests
-	go run ./main.go
+	@echo "Deprecated: use 'make run-azure or make run-aws'"
+	go run ./main.go --provider=azure
 
 # Install CRDs into a cluster
 install: manifests

@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	providerv1alpha1 "github.com/giantswarm/apiextensions/v3/pkg/apis/provider/v1alpha1"
+	releasev1alpha1 "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
 	"github.com/giantswarm/certs/v3/pkg/certs"
 	"github.com/giantswarm/k8sclient/v4/pkg/k8sclient"
 	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
@@ -31,6 +33,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	capzv1alpha3 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
+	expcapzv1alpha3 "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
+	bootstrapkubeadmv1alpha3 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
+	controlplanekubeadmv1alpha3 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
+	expcapiv1alpha3 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -51,12 +58,20 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = capiv1alpha3.AddToScheme(scheme)
+	_ = providerv1alpha1.AddToScheme(scheme)
+	_ = capzv1alpha3.AddToScheme(scheme)
+	_ = expcapiv1alpha3.AddToScheme(scheme)
+	_ = expcapzv1alpha3.AddToScheme(scheme)
+	_ = releasev1alpha1.AddToScheme(scheme)
+	_ = bootstrapkubeadmv1alpha3.AddToScheme(scheme)
+	_ = controlplanekubeadmv1alpha3.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
 var flags = struct {
 	LeaderElect        bool
 	MetricsBindAddress string
+	Provider           string
 }{}
 
 func initFlags() (errors []error) {
@@ -67,11 +82,13 @@ func initFlags() (errors []error) {
 	const (
 		flagLeaderElect       = "leader-elect"
 		flagMetricsBindAddres = "metrics-bind-address"
+		flagProvider          = "provider"
 	)
 
 	// Flag binding.
 	flag.Bool(flagLeaderElect, false, "Enable leader election for controller manager.")
 	flag.String(flagMetricsBindAddres, ":8080", "The address the metric endpoint binds to.")
+	flag.String(flagProvider, "", "Provider name for the migration.")
 
 	// Parse flags and configuration.
 	flag.Parse()
@@ -83,12 +100,14 @@ func initFlags() (errors []error) {
 	// Value binding.
 	flags.LeaderElect = viper.GetBool(flagLeaderElect)
 	flags.MetricsBindAddress = viper.GetString(flagMetricsBindAddres)
+	flags.Provider = viper.GetString(flagProvider)
 
 	// Validation.
 
-	//if flags.MyFlag == "" {
-	//	errors = append(errors, fmt.Errorf("--%s must be not empty", flagMyFlag))
-	//}
+	if flags.Provider != "aws" && flags.Provider != "azure" {
+		errors = append(errors, fmt.Errorf("--%s must be either \"aws\" or \"azure\"", flagProvider))
+	}
+
 	return
 }
 
@@ -104,6 +123,7 @@ func initViper(configPaths []string) (errors []error) {
 		errors = append(errors, err)
 		return
 	}
+
 	return
 }
 
@@ -179,22 +199,38 @@ func mainE(ctx context.Context) error {
 		}
 	}
 
-	var azureMigratorFactory migration.MigratorFactory
+	var migratorFactory migration.MigratorFactory
 	{
-		azureMigratorFactory, err = migration.NewAzureMigratorFactory(migration.AzureMigrationConfig{
-			CtrlClient:    mgr.GetClient(),
-			Logger:        log,
-			TenantCluster: tenantCluster,
-		})
-		if err != nil {
-			return microerror.Mask(err)
+		switch flags.Provider {
+		case "aws":
+			migratorFactory, err = migration.NewAWSMigratorFactory(migration.AWSMigrationConfig{
+				CtrlClient:    mgr.GetClient(),
+				Logger:        log,
+				TenantCluster: tenantCluster,
+			})
+
+			if err != nil {
+				return microerror.Mask(err)
+			}
+		case "azure":
+			migratorFactory, err = migration.NewAzureMigratorFactory(migration.AzureMigrationConfig{
+				CtrlClient:    mgr.GetClient(),
+				Logger:        log,
+				TenantCluster: tenantCluster,
+			})
+			if err != nil {
+				return microerror.Mask(err)
+			}
+		default:
+			return microerror.Mask(fmt.Errorf("unknown provider %#q", flags.Provider))
 		}
+
 	}
 
 	if err = (&controllers.ClusterReconciler{
 		Client:          mgr.GetClient(),
 		Log:             log,
-		MigratorFactory: azureMigratorFactory,
+		MigratorFactory: migratorFactory,
 		Scheme:          mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		return microerror.Mask(err)
