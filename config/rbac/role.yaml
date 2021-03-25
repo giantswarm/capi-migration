@@ -7,7 +7,7 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - cluster.x-k8s.io.giantswarm.io
+  - cluster.x-k8s.io
   resources:
   - clusters
   verbs:

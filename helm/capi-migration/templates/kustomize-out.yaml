@@ -144,7 +144,7 @@ metadata:
   name: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-manager-role'
 rules:
 - apiGroups:
-  - cluster.x-k8s.io.giantswarm.io
+  - cluster.x-k8s.io
   resources:
   - clusters
   verbs:

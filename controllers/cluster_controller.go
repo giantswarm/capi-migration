@@ -46,7 +46,7 @@ type ClusterReconciler struct {
 	loopSeq int64
 }
 
-// +kubebuilder:rbac:groups=cluster.x-k8s.io.giantswarm.io,resources=clusters,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cluster.x-k8s.io.giantswarm.io,resources=clusters/status,verbs=get;update;patch
 
 func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
