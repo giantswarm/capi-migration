@@ -12,6 +12,7 @@ import (
 	"github.com/giantswarm/micrologger"
 	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/rest"
 	capz "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
 	capzexp "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
@@ -95,11 +96,26 @@ func (f *azureMigratorFactory) NewMigrator(cluster *v1alpha3.Cluster) (Migrator,
 }
 
 func (m *azureMigrator) IsMigrated(ctx context.Context) (bool, error) {
+	// Look for the AzureConfig CR.
+	ac := provider.AzureConfig{}
+	err := m.mcCtrlClient.Get(ctx, ctrl.ObjectKey{Namespace: "default", Name: m.clusterID}, &ac)
+	if errors.IsNotFound(err) {
+		return true, nil
+	} else if err != nil {
+		return false, microerror.Mask(err)
+	}
+
 	return false, nil
 }
 
 func (m *azureMigrator) IsMigrating(ctx context.Context) (bool, error) {
-	return false, nil
+	err := m.readCRs(ctx)
+	if err != nil {
+		return false, microerror.Mask(err)
+	}
+
+	_, ok := m.crs.azureCluster.Labels["cluster.x-k8s.io/watch-filter"]
+	return ok, nil
 }
 
 func (m *azureMigrator) Prepare(ctx context.Context) error {
@@ -191,6 +207,31 @@ func (m *azureMigrator) readCRs(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
+	err = m.readWorkersMachineDeployment(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readMasterAzureMachineTemplate(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readWorkersAzureMachineTemplate(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readKubeadmControlPlane(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readWorkersKubeadmConfigTemplate(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
 	releaseVer := m.crs.cluster.GetLabels()[label.ReleaseVersion]
 	err = m.readRelease(ctx, releaseVer)
 	if err != nil {
@@ -249,6 +290,11 @@ func (m *azureMigrator) prepareMissingCRs(ctx context.Context) error {
 func (m *azureMigrator) updateCRs(ctx context.Context) error {
 	var err error
 
+	err = m.readCRs(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
 	err = m.updateCluster(ctx)
 	if err != nil {
 		return microerror.Mask(err)
@@ -265,6 +311,11 @@ func (m *azureMigrator) updateCRs(ctx context.Context) error {
 // triggerMigration executes the last missing updates on CRs so that
 // reconciliation transistions to upstream controllers.
 func (m *azureMigrator) triggerMigration(ctx context.Context) error {
+	err := m.readCRs(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
 	releaseComponents := getReleaseComponents(m.crs.release)
 
 	{
@@ -286,6 +337,9 @@ func (m *azureMigrator) triggerMigration(ctx context.Context) error {
 	}
 
 	{
+		if m.crs.masterAzureMachineTemplate.Labels == nil {
+			m.crs.masterAzureMachineTemplate.Labels = make(map[string]string)
+		}
 		m.crs.masterAzureMachineTemplate.Labels["cluster.x-k8s.io/watch-filter"] = releaseComponents["cluster-api-provider-azure"]
 		err := m.mcCtrlClient.Update(ctx, m.crs.masterAzureMachineTemplate)
 		if err != nil {
@@ -294,6 +348,9 @@ func (m *azureMigrator) triggerMigration(ctx context.Context) error {
 	}
 
 	{
+		if m.crs.workersAzureMachineTemplate.Labels == nil {
+			m.crs.workersAzureMachineTemplate.Labels = make(map[string]string)
+		}
 		m.crs.workersAzureMachineTemplate.Labels["cluster.x-k8s.io/watch-filter"] = releaseComponents["cluster-api-provider-azure"]
 		err := m.mcCtrlClient.Update(ctx, m.crs.workersAzureMachineTemplate)
 		if err != nil {
@@ -302,6 +359,9 @@ func (m *azureMigrator) triggerMigration(ctx context.Context) error {
 	}
 
 	{
+		if m.crs.kubeadmControlPlane.Labels == nil {
+			m.crs.kubeadmControlPlane.Labels = make(map[string]string)
+		}
 		m.crs.kubeadmControlPlane.Labels["cluster.x-k8s.io/watch-filter"] = releaseComponents["cluster-api-control-plane"]
 		m.crs.kubeadmControlPlane.Labels[label.ReleaseVersion] = m.crs.release.Name
 		err := m.mcCtrlClient.Update(ctx, m.crs.kubeadmControlPlane)
@@ -311,6 +371,9 @@ func (m *azureMigrator) triggerMigration(ctx context.Context) error {
 	}
 
 	{
+		if m.crs.workersKubeadmConfigTemplate.Labels == nil {
+			m.crs.workersKubeadmConfigTemplate.Labels = make(map[string]string)
+		}
 		m.crs.workersKubeadmConfigTemplate.Labels["cluster.x-k8s.io/watch-filter"] = releaseComponents["cluster-api-bootstrap-provider-kubeadm"]
 		m.crs.workersKubeadmConfigTemplate.Labels[label.ReleaseVersion] = m.crs.release.Name
 		err := m.mcCtrlClient.Update(ctx, m.crs.workersKubeadmConfigTemplate)
@@ -319,9 +382,16 @@ func (m *azureMigrator) triggerMigration(ctx context.Context) error {
 		}
 	}
 	{
+		azurecluster := &capz.AzureCluster{}
+		err := m.mcCtrlClient.Get(ctx, ctrl.ObjectKey{Name: m.crs.azureCluster.Name, Namespace: m.crs.azureCluster.Namespace}, azurecluster)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+
+		m.crs.azureCluster = azurecluster
 		m.crs.azureCluster.Labels["cluster.x-k8s.io/watch-filter"] = releaseComponents["cluster-api-provider-azure"]
 		m.crs.azureCluster.Labels[label.ReleaseVersion] = m.crs.release.Name
-		err := m.mcCtrlClient.Update(ctx, m.crs.azureCluster)
+		err = m.mcCtrlClient.Update(ctx, m.crs.azureCluster)
 		if err != nil {
 			return microerror.Mask(err)
 		}

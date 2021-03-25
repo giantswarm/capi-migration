@@ -8,7 +8,6 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Azure/go-autorest/autorest/to"
 	provider "github.com/giantswarm/apiextensions/v3/pkg/apis/provider/v1alpha1"
 	release "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
 	"github.com/giantswarm/apiextensions/v3/pkg/label"
@@ -391,6 +390,81 @@ func (m *azureMigrator) readAzureMachinePools(ctx context.Context) error {
 	return nil
 }
 
+func (m *azureMigrator) readWorkersMachineDeployment(ctx context.Context) error {
+	md := &capi.MachineDeployment{}
+	err := m.mcCtrlClient.Get(ctx, ctrl.ObjectKey{Name: fmt.Sprintf("%s-md-0", m.clusterID), Namespace: "default"}, md)
+	if apierrors.IsNotFound(err) {
+		// It's ok as this CR can be missing.
+		return nil
+	} else if err != nil {
+		return microerror.Mask(err)
+	}
+
+	m.crs.workersMachineDeployment = md
+
+	return nil
+}
+
+func (m *azureMigrator) readMasterAzureMachineTemplate(ctx context.Context) error {
+	mt := &capz.AzureMachineTemplate{}
+	err := m.mcCtrlClient.Get(ctx, ctrl.ObjectKey{Name: fmt.Sprintf("%s-control-plane", m.clusterID), Namespace: "default"}, mt)
+	if apierrors.IsNotFound(err) {
+		// It's ok as this CR can be missing.
+		return nil
+	} else if err != nil {
+		return microerror.Mask(err)
+	}
+
+	m.crs.masterAzureMachineTemplate = mt
+
+	return nil
+}
+
+func (m *azureMigrator) readWorkersAzureMachineTemplate(ctx context.Context) error {
+	mt := &capz.AzureMachineTemplate{}
+	err := m.mcCtrlClient.Get(ctx, ctrl.ObjectKey{Name: fmt.Sprintf("%s-md-0", m.clusterID), Namespace: "default"}, mt)
+	if apierrors.IsNotFound(err) {
+		// It's ok as this CR can be missing.
+		return nil
+	} else if err != nil {
+		return microerror.Mask(err)
+	}
+
+	m.crs.workersAzureMachineTemplate = mt
+
+	return nil
+}
+
+func (m *azureMigrator) readKubeadmControlPlane(ctx context.Context) error {
+	kcp := &kubeadm.KubeadmControlPlane{}
+	err := m.mcCtrlClient.Get(ctx, ctrl.ObjectKey{Name: fmt.Sprintf("%s-control-plane", m.clusterID), Namespace: "default"}, kcp)
+	if apierrors.IsNotFound(err) {
+		// It's ok as this CR can be missing.
+		return nil
+	} else if err != nil {
+		return microerror.Mask(err)
+	}
+
+	m.crs.kubeadmControlPlane = kcp
+
+	return nil
+}
+
+func (m *azureMigrator) readWorkersKubeadmConfigTemplate(ctx context.Context) error {
+	kcp := &cabpkv1.KubeadmConfigTemplate{}
+	err := m.mcCtrlClient.Get(ctx, ctrl.ObjectKey{Name: fmt.Sprintf("%s-md-0", m.clusterID), Namespace: "default"}, kcp)
+	if apierrors.IsNotFound(err) {
+		// It's ok as this CR can be missing.
+		return nil
+	} else if err != nil {
+		return microerror.Mask(err)
+	}
+
+	m.crs.workersKubeadmConfigTemplate = kcp
+
+	return nil
+}
+
 func (m *azureMigrator) readRelease(ctx context.Context, ver string) error {
 	// Ensure the release name starts with a "v"
 	ver = strings.TrimPrefix(ver, "v")
@@ -407,7 +481,11 @@ func (m *azureMigrator) readRelease(ctx context.Context, ver string) error {
 }
 
 func (m *azureMigrator) updateCluster(ctx context.Context) error {
-	cluster := m.crs.cluster
+	cluster := &capi.Cluster{}
+	err := m.mcCtrlClient.Get(ctx, ctrl.ObjectKey{Name: m.crs.cluster.Name, Namespace: m.crs.cluster.Namespace}, cluster)
+	if err != nil {
+		return microerror.Mask(err)
+	}
 
 	// Drop operator version label.
 	delete(cluster.Labels, label.AzureOperatorVersion)
@@ -416,9 +494,9 @@ func (m *azureMigrator) updateCluster(ctx context.Context) error {
 	cluster.Finalizers = nil
 
 	// Adjust k8s apiserver bind port to match kubeadm.
-	if cluster.Spec.ClusterNetwork != nil && cluster.Spec.ClusterNetwork.APIServerPort != nil {
-		cluster.Spec.ClusterNetwork.APIServerPort = to.Int32Ptr(6443)
-	}
+	//if cluster.Spec.ClusterNetwork != nil && cluster.Spec.ClusterNetwork.APIServerPort != nil {
+	//	cluster.Spec.ClusterNetwork.APIServerPort = to.Int32Ptr(6443)
+	//}
 
 	cluster.Spec.ControlPlaneRef = &corev1.ObjectReference{
 		APIVersion: m.crs.kubeadmControlPlane.APIVersion,
@@ -426,7 +504,7 @@ func (m *azureMigrator) updateCluster(ctx context.Context) error {
 		Name:       m.crs.kubeadmControlPlane.Name,
 	}
 
-	err := m.mcCtrlClient.Update(ctx, cluster)
+	err = m.mcCtrlClient.Update(ctx, cluster)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -503,11 +581,17 @@ func (m *azureMigrator) updateAzureCluster(ctx context.Context) error {
 		}
 
 		s := &capz.SubnetSpec{
+			Role: capz.SubnetControlPlane,
 			Name: fmt.Sprintf("%s-VirtualNetwork-MasterSubnet", cluster.Name),
 			CIDRBlocks: []string{
 				masterSubnetCIDR.String(),
 			},
-			Role: capz.SubnetControlPlane,
+			SecurityGroup: capz.SecurityGroup{
+				Name: fmt.Sprintf("%s-MasterSecurityGroup", m.clusterID),
+			},
+			RouteTable: capz.RouteTable{
+				Name: fmt.Sprintf("%s-RouteTable", m.clusterID),
+			},
 		}
 
 		cluster.Spec.NetworkSpec.Subnets = append(cluster.Spec.NetworkSpec.Subnets, s)
@@ -531,6 +615,12 @@ func (m *azureMigrator) updateAzureCluster(ctx context.Context) error {
 				workerSubnetCIDR.String(),
 			},
 			Role: capz.SubnetNode,
+			SecurityGroup: capz.SecurityGroup{
+				Name: fmt.Sprintf("%s-WorkerSecurityGroup", m.clusterID),
+			},
+			RouteTable: capz.RouteTable{
+				Name: fmt.Sprintf("%s-RouteTable", m.clusterID),
+			},
 		}
 
 		cluster.Spec.NetworkSpec.Subnets = append(cluster.Spec.NetworkSpec.Subnets, s)
