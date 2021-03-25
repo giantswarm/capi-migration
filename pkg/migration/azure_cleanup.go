@@ -126,11 +126,18 @@ func (m *azureMigrator) ensureLegacyNodePoolsAreDeleted(ctx context.Context) err
 	// Check there are at least `oldWorkersCount` CAPI workers in a `Ready` state.
 	{
 		workers := v1.NodeList{}
-		// TODO set correct labels
 		err = m.wcCtrlClient.List(ctx, &workers, client.MatchingLabels{})
 
 		var readyCAPIworkers int
 		for _, node := range workers.Items {
+			if _, ok := node.Labels["node-role.kubernetes.io/master"]; ok {
+				// Master node, ignore.
+				continue
+			}
+			if node.Labels["role"] == "worker" {
+				// GS worker, ignore.
+				continue
+			}
 			if node.Status.Phase == v1.NodeRunning {
 				readyCAPIworkers += 1
 			}
@@ -139,6 +146,8 @@ func (m *azureMigrator) ensureLegacyNodePoolsAreDeleted(ctx context.Context) err
 		if readyCAPIworkers < oldWorkersCount {
 			return microerror.Maskf(newWorkersNotReady, "Expected at least %d CAPI workers to be ready, %d found", oldWorkersCount, readyCAPIworkers)
 		}
+
+		m.logger.Debugf(ctx, "Found %d CAPI nodes ready (at least %d wanted)", readyCAPIworkers, oldWorkersCount)
 	}
 
 	m.logger.Debugf(ctx, "Found %d VMSSes to be deleted", len(vmssesToBeDeleted))
