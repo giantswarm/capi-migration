@@ -1,0 +1,11 @@
+leaderElect: false
+metricsBindAddress: ":8080"
+
+# Generic configuration.
+
+image:
+  name: "giantswarm/aws-operator"
+  tag: "[[ .Version ]]"
+project:
+  branch: "[[ .Branch ]]"
+  commit: "[[ .SHA ]]"

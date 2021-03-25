@@ -7,7 +7,6 @@ bases:
 - ../default
 
 resources:
-- namespace.yaml
 - psp.yaml
 - psp_role.yaml
 - psp_role_binding.yaml

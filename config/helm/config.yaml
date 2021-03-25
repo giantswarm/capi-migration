@@ -1,0 +1,2 @@
+leader-elect: {{ .Values.leaderElect }}
+metrics-bind-address: {{ .Values.metricsBindAddress | quote }}

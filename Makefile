@@ -43,8 +43,11 @@ undeploy: manifests
 	kustomize build config/dev | kubectl delete -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
+manifests: CHART_TEMPLATE_FILE := $(shell ls -d helm/$$(basename $$(go list -m)))/templates/kustomize-out.yaml
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	mkdir -p $(shell dirname $(CHART_TEMPLATE_FILE))
+	kustomize build config/helm -o '$(CHART_TEMPLATE_FILE)'
 
 # Run go fmt against code
 fmt:
