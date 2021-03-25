@@ -141,7 +141,7 @@ func (m *azureMigrator) Cleanup(ctx context.Context) error {
 		return fmt.Errorf("cluster has not migrated yet")
 	}
 
-	return nil
+	return m.cleanup(ctx)
 }
 
 // readCRs reads existing CRs involved in migration. For Azure this contains
