@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	giantswarmawsalpha3 "github.com/giantswarm/apiextensions/pkg/apis/infrastructure/v1alpha2"
+	giantswarmawsalpha3 "github.com/giantswarm/apiextensions/v3/pkg/apis/infrastructure/v1alpha2"
 	release "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
 	"github.com/giantswarm/apiextensions/v3/pkg/label"
 	"github.com/giantswarm/k8sclient/v4/pkg/k8sclient"
