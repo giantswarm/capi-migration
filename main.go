@@ -34,6 +34,8 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	capzv1alpha3 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
 	expcapzv1alpha3 "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
+	bootstrapkubeadmv1alpha3 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
+	controlplanekubeadmv1alpha3 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
 	expcapiv1alpha3 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -60,6 +62,8 @@ func init() {
 	_ = expcapiv1alpha3.AddToScheme(scheme)
 	_ = expcapzv1alpha3.AddToScheme(scheme)
 	_ = releasev1alpha1.AddToScheme(scheme)
+	_ = bootstrapkubeadmv1alpha3.AddToScheme(scheme)
+	_ = controlplanekubeadmv1alpha3.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
