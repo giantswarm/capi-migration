@@ -1,7 +1,7 @@
 # DO NOT EDIT. Generated with:
 #
 #    devctl@4.4.0
-# trigger circle
+#
 
 APPLICATION    := $(shell go list -m | cut -d '/' -f 3)
 BUILDTIMESTAMP := $(shell date -u '+%FT%TZ')
