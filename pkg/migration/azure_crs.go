@@ -433,9 +433,6 @@ func (m *azureMigrator) updateAzureCluster(ctx context.Context) error {
 	// Drop finalizers.
 	cluster.Finalizers = nil
 
-	// Use default credentials.
-	cluster.Spec.IdentityRef = nil
-
 	if cluster.Spec.NetworkSpec.APIServerLB.Name == "" {
 		cluster.Spec.NetworkSpec.APIServerLB = capz.LoadBalancerSpec{
 			Name: fmt.Sprintf("%s-%s-%s", cluster.Name, "API", "PublicLoadBalancer"),
@@ -452,9 +449,6 @@ func (m *azureMigrator) updateAzureCluster(ctx context.Context) error {
 		}
 	}
 
-	// START OF UGLY HACK **************************************************
-	// XXX: This is just a shortcut to make testing ergonomics better. Final
-	// code should be rewritten.
 	if len(cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs) == 0 {
 		cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs = append(cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs, capz.FrontendIP{})
 	}
@@ -468,7 +462,6 @@ func (m *azureMigrator) updateAzureCluster(ctx context.Context) error {
 	if cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs[0].PublicIP.Name == "" {
 		cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs[0].PublicIP.Name = fmt.Sprintf("%s-%s-%s-%s", cluster.Name, "API", "PublicLoadBalancer", "PublicIP")
 	}
-	// END OF UGLY HACK **************************************************
 
 	var masterSubnetFound, workerSubnetFound bool
 	for _, snet := range cluster.Spec.NetworkSpec.Subnets {
