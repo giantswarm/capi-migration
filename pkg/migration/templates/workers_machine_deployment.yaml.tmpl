@@ -1,0 +1,24 @@
+apiVersion: cluster.x-k8s.io/v1alpha3
+kind: MachineDeployment
+metadata:
+  name: {{.ClusterID}}-md-0
+  namespace: default
+spec:
+  clusterName: {{.ClusterID}}
+  replicas: 1
+  selector:
+    matchLabels: null
+  template:
+    spec:
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+          kind: KubeadmConfigTemplate
+          name: {{.ClusterID}}-md-0
+      clusterName: {{.ClusterID}}
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+        kind: AzureMachineTemplate
+        name: {{.ClusterID}}-md-0
+      version: {{ .K8sVersion }}
+

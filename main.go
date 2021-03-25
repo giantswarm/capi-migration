@@ -182,6 +182,7 @@ func mainE(ctx context.Context) error {
 	var azureMigratorFactory migration.MigratorFactory
 	{
 		azureMigratorFactory, err = migration.NewAzureMigratorFactory(migration.AzureMigrationConfig{
+			CtrlClient:    mgr.GetClient(),
 			Logger:        log,
 			TenantCluster: tenantCluster,
 		})

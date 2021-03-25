@@ -1,0 +1,286 @@
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+kind: KubeadmControlPlane
+metadata:
+  name: {{.ClusterID}}-control-plane
+  namespace: default
+  annotations:
+    controlplane.cluster.x-k8s.io/skip-coredns: "true"
+spec:
+  replicas: 1
+  version: {{ .K8sVersion }}
+  infrastructureTemplate:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+    kind: AzureMachineTemplate
+    name: {{.ClusterID}}-control-plane
+  kubeadmConfigSpec:
+    clusterConfiguration:
+      apiServer:
+        certSANs:
+          - api.{{.ClusterID}}.k8s.{{.InstallationBaseDomain}}
+        extraArgs:
+          cloud-config: /etc/kubernetes/azure.json
+          cloud-provider: azure
+          etcd-prefix: giantswarm.io
+          encryption-provider-config: "/etc/kubernetes/encryption/k8s-encryption-config.yaml"
+        extraVolumes:
+        - hostPath: /etc/kubernetes/azure.json
+          mountPath: /etc/kubernetes/azure.json
+          name: cloud-config
+          readOnly: true
+        - hostPath: /etc/kubernetes/encryption/
+          mountPath: /etc/kubernetes/encryption/
+          name: encryption
+          readOnly: true
+        timeoutForControlPlane: 20m
+      controllerManager:
+        extraArgs:
+          allocate-node-cidrs: "true"
+          cloud-config: /etc/kubernetes/azure.json
+          cloud-provider: azure
+          cluster-name: {{.ClusterID}}
+        extraVolumes:
+        - hostPath: /etc/kubernetes/azure.json
+          mountPath: /etc/kubernetes/azure.json
+          name: cloud-config
+          readOnly: true
+      controlPlaneEndpoint: api.{{.ClusterID}}.k8s.{{.InstallationBaseDomain}}:443
+      etcd:
+        local:
+          dataDir: /var/lib/etcddisk/etcd
+          extraArgs:
+            "initial-cluster-state": existing
+            "initial-cluster": "$ETCD_INITIAL_CLUSTER"
+          imageTag: {{ .EtcdVersion }}
+          imageRepository: "quay.io/giantswarm"
+      networking:
+        dnsDomain: cluster.local
+        serviceSubnet: 172.31.0.0/16
+    diskSetup:
+      filesystems:
+      - device: /dev/disk/azure/scsi1/lun0
+        extraOpts:
+        - -E
+        - lazy_itable_init=1,lazy_journal_init=1
+        filesystem: ext4
+        label: etcd_disk
+      - device: ephemeral0.1
+        filesystem: ext4
+        label: ephemeral0
+        replaceFS: ntfs
+      partitions:
+      - device: /dev/disk/azure/scsi1/lun0
+        layout: true
+        overwrite: false
+        tableType: gpt
+    files:
+    - contentFrom:
+        secret:
+          key: control-plane-azure.json
+          name: {{.ClusterID}}-control-plane-azure-json
+      owner: root:root
+      path: /etc/kubernetes/azure.json
+      permissions: "0644"
+    - content: |
+        [Unit]
+        Description=Setup iptables Nat rules for Azure CNI
+        Wants=systemd-networkd.service
+        After=systemd-networkd.service
+        [Service]
+        Type=oneshot
+        ExecStart=/bin/sh -c "iptables -t nat -A POSTROUTING -m addrtype ! --dst-type local ! -d {{.ClusterCIDR}} -j MASQUERADE"
+        [Install]
+        WantedBy=multi-user.target
+      owner: root:root
+      path: /etc/systemd/system/azure-cni-nat-rules.service
+      permissions: "0644"
+    - content: "whites ALL = (ALL) NOPASSWD: ALL"
+      owner: root:root
+      path: /etc/sudoers.d/whites
+      permissions: "0440"
+    - content: "tuommaki ALL = (ALL) NOPASSWD: ALL"
+      owner: root:root
+      path: /etc/sudoers.d/tuommaki
+      permissions: "0440"
+    - contentFrom:
+        secret:
+          key: tls.crt
+          name: {{.ClusterID}}-ca
+      path: /etc/kubernetes/pki/etcd/ca.crt
+      permissions: "0640"
+      owner: root:root
+    - contentFrom:
+        secret:
+          key: tls.key
+          name: {{.ClusterID}}-ca
+      owner: root:root
+      path: /etc/kubernetes/pki/etcd/ca.key
+      permissions: "0600"
+    - contentFrom:
+        secret:
+          key: tls.crt
+          name: {{.ClusterID}}-ca
+      owner: root:root
+      path: /etc/kubernetes/pki/ca.crt
+      permissions: "0640"
+    - contentFrom:
+        secret:
+          key: tls.key
+          name: {{.ClusterID}}-ca
+      owner: root:root
+      path: /etc/kubernetes/pki/ca.key
+      permissions: "0600"
+    - contentFrom:
+        secret:
+          name: {{.ClusterID}}-etcd
+          key: "tls.crt"
+      owner: root:root
+      path: /etc/kubernetes/pki/etcd/old-etcd-cert.pem
+      permissions: "0640"
+    - contentFrom:
+        secret:
+          name: {{.ClusterID}}-etcd
+          key: "tls.key"
+      owner: root:root
+      path: /etc/kubernetes/pki/etcd/old-etcd-key.pem
+      permissions: "0640"
+    - contentFrom:
+        secret:
+          name: {{.ClusterID}}-service-account
+          key: "tls.crt"
+      owner: root:root
+      path: /etc/kubernetes/pki/sa.pub
+      permissions: "0640"
+    - contentFrom:
+        secret:
+          name: {{.ClusterID}}-service-account
+          key: "tls.key"
+      owner: root:root
+      path: /etc/kubernetes/pki/sa.key
+      permissions: "0640"
+    - contentFrom:
+        secret:
+          name: {{.ClusterID}}-k8s-encryption-config
+          key: encryption
+      owner: root:root
+      path: "/etc/kubernetes/encryption/k8s-encryption-config.yaml"
+      permissions: "0644"
+    - contentFrom:
+        secret:
+          name: {{.ClusterID}}-proxy-config
+          key: proxy
+      owner: root:root
+      path: "/etc/kubernetes/config/proxy-config.yml"
+      permissions: "0644"
+    - contentFrom:
+        secret:
+          name: {{.ClusterID}}-kubeconfig
+          key: value
+      owner: root:root
+      path: "/etc/kubernetes/config/proxy-kubeconfig.yaml"
+      permissions: "0644"
+    - content: |
+        #!/bin/sh
+        # create etcd ca bundle
+        cat /etc/kubernetes/pki/etcd/ca.crt /etc/kubernetes/pki/etcd/old-etcd-ca.pem > /etc/kubernetes/pki/etcd/ca-bundle.pem
+        # get ETCDCTL
+        DOWNLOAD_URL=https://github.com/etcd-io/etcd/releases/download
+        ETCD_VER={{.EtcdVersion}}
+        rm -f /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
+        rm -rf /tmp/etcd && mkdir -p /tmp/etcd
+        curl -L ${DOWNLOAD_URL}/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz -o /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
+        tar xzvf /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz -C /tmp/etcd --strip-components=1
+        rm -f /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
+        /tmp/etcd/etcdctl version
+        # add hosts entry to reach etcd on private address
+        echo "" >>/etc/hosts
+        echo "{{.ClusterMasterIP}} etcd.{{.ClusterID}}.k8s.{{.InstallationBaseDomain}}" >>/etc/hosts
+        # get machine IP
+        IP=$(ip route | grep default | awk '{print $9}')
+        # add new member to the old etcd cluster
+        while ! new_cluster=$(/tmp/etcd/etcdctl \
+          --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+          --key=/etc/kubernetes/pki/etcd/old-etcd-key.pem \
+          --cert=/etc/kubernetes/pki/etcd/old-etcd-cert.pem \
+          --endpoints=https://etcd.{{.ClusterID}}.k8s.{{.InstallationBaseDomain}}:2379 \
+          --peer-urls="https://${IP}:2380" \
+          member \
+          add \
+          $(hostname -s) | grep 'ETCD_INITIAL_CLUSTER=')
+        do
+          echo "retrying in 2s"
+          sleep 2s
+        done
+        echo "successfully added a new member to the old etcd cluster"
+        # export ETCD_INITIAL_CLUSTER env for later envsubst command
+        export ${new_cluster}
+        # copy tmpl
+        cp /tmp/kubeadm.yaml /tmp/kubeadm.yaml.tmpl
+        sed -e '/external/,+4d' /tmp/kubeadm.yaml.tmpl
+        # fill the initial cluster variable into kubeadm config
+        envsubst < /tmp/kubeadm.yaml.tmpl > /tmp/kubeadm.yaml
+      owner: root:root
+      path: "/migration/join-existing-cluster.sh"
+      permissions: "0640"
+    - content: |
+        #!/bin/bash
+        ETCDCTL="/tmp/etcd/etcdctl --cacert=/etc/kubernetes/pki/etcd/ca.crt           --key=/etc/kubernetes/pki/etcd/old-etcd-key.pem           --cert=/etc/kubernetes/pki/etcd/old-etcd-cert.pem --endpoints=https://127.0.0.1:2379"
+        attempts=3
+        while :
+        do
+          # Check if local instance endpoint is healthy
+          ${ETCDCTL} endpoint health 2>&1 >/dev/null
+          if [ $? -ne 0 ]
+          then
+            if [ $attempts -gt 0 ]
+            then
+              attempts=$((attempts-1))
+              sleep 10
+            else
+              echo "Local endpoint not healthy, aborting"
+              exit 1
+            fi
+          else
+            break
+          fi
+        done
+        # Get list of all members
+        data="$(${ETCDCTL} member list -w table)"
+        id="$(echo "$data"| grep "https://etcd"| cut -d"|" -f2 | xargs)"
+        echo "Removing member $id"
+        $ETCDCTL member remove $id
+      owner: root:root
+      path: "/migration/remove-gs-etcd-member.sh"
+      permissions: "0640"
+    postKubeadmCommands:
+    - "/bin/sh /migration/remove-gs-etcd-member.sh"
+    preKubeadmCommands:
+    - "/bin/systemctl enable azure-cni-nat-rules.service"
+    - "/bin/systemctl start azure-cni-nat-rules.service"
+    - "/bin/sh /migration/join-existing-cluster.sh"
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cloud-config: /etc/kubernetes/azure.json
+          cloud-provider: azure
+        name: '{{ ds.meta_data["local_hostname"] }}'
+      localAPIEndpoint:
+        advertiseAddress: ""
+        bindPort: 443
+    joinConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cloud-config: /etc/kubernetes/azure.json
+          cloud-provider: azure
+        name: '{{ ds.meta_data["local_hostname"] }}'
+    mounts:
+    - - LABEL=etcd_disk
+      - /var/lib/etcddisk
+    useExperimentalRetryJoin: true
+    users:
+    - name: whites
+      sshAuthorizedKeys:
+      - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC7tf8jCm827wKhbBUh0xT/2D954cO54sOJ5/vn5sZSDIkxErMUCKH5WZSEjh3iAaKeq8wAn6XpXYvCwRu62csO1vu5l3Wh/kLnYo+1ALLoL8jM4VdKUiv4jOaM2ZL/UR5j1rt5L0kK3//kjtCXMlwyjpBxH9crJPA1lnmUdADDN+XBZ1x4EmpWwR8eV2CiYLU7sylF9V0R1bObUptpvOeYb/B3T1H9GSFgpVSQzvtI/OEZmoSzBz7VdJiIfGTwUKEcEr+9WBpVD5quLmG0LdwQ68dBeTjIaj4A5PYfu9iiNTKNiqDEIWtIkoVLo7PxZJblrYPQPYFycnUJeLHngZYmX12TBPcl3xQPdxyPeTGz4KBa0jfeWdHi7JkaOHtrmQvF0wcj3REEZYMJKz/8tMA4tqP5AnvTudZgNGHXtO9kiGhG5rn3dWTr6R+crRuWszQVVasx4IEKMOwdxc8sgmx1W0mPetKDUh6siFF3TRu0KcJ9BDrHGciWMkfXQgP4txIRgvPHGJmoywRQ3zoN0hWzjI6bEaUvRVEyk0u0dreTmTiG6JFcSaSMJWZvuhvKCKTbp1ysITzH7EIJwQ2nfSz88j4tVRfXA/BSxOc4aR6l3j1zApSfV7mVag9TSPfMVdXWEoOlpdiQH/V0Mm5ummkQ1JloDGBRKR0AuKUrGtkKfw== cardno:000611038607"
+    - name: tuommaki
+      sshAuthorizedKeys:
+      - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCcSLjqSNw62kEa/QsfdOCabBIAyorVYJRTYz6x0w0IR0TAZiVonG3LQDIoRB8FC+8yvcTNxW/42ZO+xTyc9nzi+vxo6EO94rWWfYCcKohH3G/mIr5MuxKjbwobwV6DIJe6tWJplKc1pFnYsd4dexU+BFdO7rOWGTqZjyVbpiZzfknID61bHVwbY93UaD86kuuhbHiRGDtov1GL5gOjHecxCk4s5gOVyZJb6qDJTySlbEUomiLBJnzRlXG6Gh/Ed+vybyarexWppnWuG4xIBp5PtLBLndspPbRaXdb1daW0q3vgbJQ5S82tyNlgDvRKPnyHbbFS2BcebTKKgYRNxx42fZr6yiio7+mdcKoxqmdckvOpNZcwrszZgyH+hC8rHVHwzMEWUY/25SL0Gx6fWkH2QeMrw1UU3qCVrho8NcFUB2d7Gke7oD93qOYEVoGtKSkX694bW+p8gOD/OPL0hNv6sxmKvIdb3UuOEbJbbsh6UsVrHW/n5Y8Rs+gJhkP752k= tuommaki@airbag"
+
