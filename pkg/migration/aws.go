@@ -144,11 +144,10 @@ func (m *awsMigrator) Cleanup(ctx context.Context) error {
 
 // readCRs reads existing CRs involved in migration. For AWS this contains
 // roughly following CRs:
-// - AWSConfig
 // - Cluster
 // - AWSCluster
 // - MachinePools
-// - AWSMachinePools
+// - AWSMachineDeployments
 //
 func (m *awsMigrator) readCRs(ctx context.Context) error {
 	var err error
