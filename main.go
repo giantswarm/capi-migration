@@ -24,12 +24,17 @@ import (
 	"strings"
 	"time"
 
+	providerv1alpha1 "github.com/giantswarm/apiextensions/v3/pkg/apis/provider/v1alpha1"
+	releasev1alpha1 "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
 	"github.com/giantswarm/certs/v3/pkg/certs"
 	"github.com/giantswarm/k8sclient/v4/pkg/k8sclient"
 	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	capzv1alpha3 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
+	expcapzv1alpha3 "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
+	expcapiv1alpha3 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -50,6 +55,11 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = capiv1alpha3.AddToScheme(scheme)
+	_ = providerv1alpha1.AddToScheme(scheme)
+	_ = capzv1alpha3.AddToScheme(scheme)
+	_ = expcapiv1alpha3.AddToScheme(scheme)
+	_ = expcapzv1alpha3.AddToScheme(scheme)
+	_ = releasev1alpha1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
