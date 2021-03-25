@@ -456,14 +456,7 @@ func (m *azureMigrator) updateAzureCluster(ctx context.Context) error {
 	// XXX: This is just a shortcut to make testing ergonomics better. Final
 	// code should be rewritten.
 	if len(cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs) == 0 {
-		ip := capz.FrontendIP{
-			Name: fmt.Sprintf("%s-%s-%s-%s", cluster.Name, "API", "PublicLoadBalancer", "Frontend"),
-			PublicIP: &capz.PublicIPSpec{
-				Name: fmt.Sprintf("%s-%s-%s-%s", cluster.Name, "API", "PublicLoadBalancer", "PublicIP"),
-			},
-		}
-
-		cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs = append(cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs, ip)
+		cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs = append(cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs, capz.FrontendIP{})
 	}
 
 	if cluster.Spec.NetworkSpec.APIServerLB.FrontendIPs[0].PublicIP == nil {
