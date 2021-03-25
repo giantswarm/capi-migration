@@ -178,6 +178,8 @@ func (m *azureMigrator) createMasterAzureMachineTemplate(ctx context.Context) er
 		return microerror.Mask(err)
 	}
 
+	m.crs.masterAzureMachineTemplate = amt
+
 	return nil
 }
 
@@ -209,6 +211,8 @@ func (m *azureMigrator) createWorkersKubeadmConfigTemplate(ctx context.Context) 
 	} else if err != nil {
 		return microerror.Mask(err)
 	}
+
+	m.crs.workersKubeadmConfigTemplate = kct
 
 	return nil
 }
@@ -242,6 +246,8 @@ func (m *azureMigrator) createWorkersAzureMachineTemplate(ctx context.Context) e
 		return microerror.Mask(err)
 	}
 
+	m.crs.workersAzureMachineTemplate = amt
+
 	return nil
 }
 
@@ -274,6 +280,8 @@ func (m *azureMigrator) createWorkersMachineDeployment(ctx context.Context) erro
 	} else if err != nil {
 		return microerror.Mask(err)
 	}
+
+	m.crs.workersMachineDeployment = md
 
 	return nil
 }
