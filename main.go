@@ -87,7 +87,7 @@ func initFlags() {
 		errors = append(errors, "--provider must be not empty")
 	}
 
-	if len(errors) > 1 {
+	if len(errors) > 0 {
 		fmt.Fprintf(os.Stderr, "%s\n", strings.Join(errors, "\n"))
 		os.Exit(2)
 	}
