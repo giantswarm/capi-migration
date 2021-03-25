@@ -16,7 +16,7 @@ const (
 )
 
 func (m *azureMigrator) getVMSSClient(ctx context.Context) (*compute.VirtualMachineScaleSetsClient, error) {
-	azureCluster := m.crs["AzureCluster"].(*v1alpha3.AzureCluster)
+	azureCluster := m.crs.azureCluster
 
 	if azureCluster.Spec.SubscriptionID == "" {
 		return nil, microerror.Maskf(subscriptionIDNotSetError, "AzureCluster %s/%s didn't have the SubscriptionID field set", azureCluster.Namespace, azureCluster.Name)
