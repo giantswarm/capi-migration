@@ -243,6 +243,7 @@ data:
     leader-elect: {{ .Values.leaderElect }}
     metrics-bind-address: {{ .Values.metricsBindAddress | quote }}
     provider: {{ .Values.provider | quote }}
+    vault-addr: {{ .Values.vaultAddr | quote }}
 kind: ConfigMap
 metadata:
   annotations:
@@ -261,7 +262,7 @@ metadata:
 ---
 apiVersion: v1
 data:
-  secret.yaml: ""
+  secret.yaml: dmF1bHQtdG9rZW46IHt7IC5WYWx1ZXMudmF1bHRUb2tlbiB8IHF1b3RlIH19Cg==
 kind: Secret
 metadata:
   annotations:
@@ -325,8 +326,8 @@ spec:
     spec:
       containers:
       - args:
-        - --config=/var/run/controller-manager/config.yaml
-        - --config=/var/run/controller-manager/secret.yaml
+        - --config=/var/run/controller-manager-cm/config.yaml
+        - --config=/var/run/controller-manager-secret/secret.yaml
         command:
         - /manager
         image: '{{ .Values.registry.domain }}/{{ .Values.image.name }}:{{ .Values.image.tag }}'
@@ -339,10 +340,10 @@ spec:
             cpu: 100m
             memory: 20Mi
         volumeMounts:
-        - mountPath: /var/run/controller-manager/config.yaml
+        - mountPath: /var/run/controller-manager-cm/
           name: controller-manager-cm
           readOnly: true
-        - mountPath: /var/run/controller-manager/secret.yaml
+        - mountPath: /var/run/controller-manager-secret/
           name: controller-manager-secret
           readOnly: true
       securityContext:

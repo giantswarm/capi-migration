@@ -9,14 +9,14 @@ spec:
       containers:
         - name: manager
           args:
-            - --config=/var/run/controller-manager/config.yaml
-            - --config=/var/run/controller-manager/secret.yaml
+            - --config=/var/run/controller-manager-cm/config.yaml
+            - --config=/var/run/controller-manager-secret/secret.yaml
           volumeMounts:
             - name: controller-manager-cm
-              mountPath: /var/run/controller-manager/
+              mountPath: /var/run/controller-manager-cm/
               readOnly: true
             - name: controller-manager-secret
-              mountPath: /var/run/controller-manager/
+              mountPath: /var/run/controller-manager-secret/
               readOnly: true
       volumes:
         - name: controller-manager-cm
