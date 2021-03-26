@@ -70,6 +70,8 @@ func init() {
 }
 
 var flags = struct {
+	AWSAccessKeyID     string
+	AWSAccessKeySecret string
 	LeaderElect        bool
 	MetricsBindAddress string
 	Provider           string
@@ -83,14 +85,18 @@ func initFlags() (errors []error) {
 
 	// Flag/configuration names.
 	const (
-		flagLeaderElect       = "leader-elect"
-		flagMetricsBindAddres = "metrics-bind-address"
-		flagProvider          = "provider"
+		flagAWSAccessKeyID     = "aws-access-id"
+		flagAWSAccessKeySecret = "aws-access-secret"
+		flagLeaderElect        = "leader-elect"
+		flagMetricsBindAddres  = "metrics-bind-address"
+		flagProvider           = "provider"
 		flagVaultAddr         = "vault-addr"
 		flagVaultToken        = "vault-token"
 	)
 
 	// Flag binding.
+	flag.String(flagAWSAccessKeyID, "", "AWS access key for MC.")
+	flag.String(flagAWSAccessKeySecret, "", "AWS secret key for MC.")
 	flag.Bool(flagLeaderElect, false, "Enable leader election for controller manager.")
 	flag.String(flagMetricsBindAddres, ":8080", "The address the metric endpoint binds to.")
 	flag.String(flagProvider, "", "Provider name for the migration.")
@@ -107,6 +113,8 @@ func initFlags() (errors []error) {
 	}
 
 	// Value binding.
+	flags.AWSAccessKeyID = viper.GetString(flagAWSAccessKeyID)
+	flags.AWSAccessKeySecret = viper.GetString(flagAWSAccessKeySecret)
 	flags.LeaderElect = viper.GetBool(flagLeaderElect)
 	flags.MetricsBindAddress = viper.GetString(flagMetricsBindAddres)
 	flags.Provider = viper.GetString(flagProvider)
@@ -123,6 +131,8 @@ func initFlags() (errors []error) {
 	}
 	if flags.VaultToken == "" {
 		errors = append(errors, fmt.Errorf("--%s flag or VAULT_TOKEN environment variable must be set", flagVaultToken))
+	if flags.Provider == "aws" && (flags.AWSAccessKeyID == "" || flags.AWSAccessKeySecret == "") {
+		errors = append(errors, fmt.Errorf("when \"aws\" provider is set, --%s and --%s must not be empty", flagAWSAccessKeyID, flagAWSAccessKeySecret))
 	}
 
 	return
@@ -243,6 +253,10 @@ func mainE(ctx context.Context) error {
 		switch flags.Provider {
 		case "aws":
 			migratorFactory, err = migration.NewAWSMigratorFactory(migration.AWSMigrationConfig{
+				AWSCredentials: migration.AWSConfig{
+					AccessKeyID:     flags.AWSAccessKeyID,
+					AccessKeySecret: flags.AWSAccessKeySecret,
+				},
 				CtrlClient:    mgr.GetClient(),
 				Logger:        log,
 				TenantCluster: tenantCluster,
