@@ -35,10 +35,3 @@ configMapGenerator:
     behavior: replace
     files:
       - config.yaml
-
-secretGenerator:
-  - name: controller-manager
-    namespace: system
-    behavior: replace
-    files:
-      - secret.yaml

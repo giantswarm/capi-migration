@@ -261,8 +261,6 @@ metadata:
   namespace: '{{ .Release.Namespace }}'
 ---
 apiVersion: v1
-data:
-  secret.yaml: dmF1bHQtdG9rZW46IHt7IC5WYWx1ZXMudmF1bHRUb2tlbiB8IHF1b3RlIH19Cg==
 kind: Secret
 metadata:
   annotations:
@@ -278,7 +276,9 @@ metadata:
     helm.sh/chart: '{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}'
   name: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-controller-manager'
   namespace: '{{ .Release.Namespace }}'
-type: Opaque
+stringData:
+  secret.yaml: |
+    vault-token: {{ .Values.vaultToken | quote }}
 ---
 apiVersion: apps/v1
 kind: Deployment

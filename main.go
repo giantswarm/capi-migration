@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -155,7 +156,16 @@ func initViper(configPaths []string) (errors []error) {
 		return nil
 	}
 	for _, p := range configPaths {
-		viper.AddConfigPath(p)
+		ext := strings.TrimPrefix(filepath.Ext(p), ".")
+		name := strings.TrimSuffix(filepath.Base(p), "."+ext)
+		dir := filepath.Dir(p)
+		viper.SetConfigName(name)
+		viper.SetConfigType(ext)
+		viper.AddConfigPath(dir)
+		err := viper.ReadInConfig()
+		if err != nil {
+			errors = append(errors, err)
+		}
 	}
 	err = viper.ReadInConfig()
 	if err != nil {
