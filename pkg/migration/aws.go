@@ -21,7 +21,6 @@ import (
 )
 
 type AWSMigrationConfig struct {
-
 	// Migration configuration + dependencies such as k8s client.
 	AWSCredentials AWSConfig
 	CtrlClient     ctrl.Client
