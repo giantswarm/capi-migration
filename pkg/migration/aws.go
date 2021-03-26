@@ -16,6 +16,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/cluster-api/api/v1alpha3"
 	capi "sigs.k8s.io/cluster-api/api/v1alpha3"
+	kubeadm "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -35,8 +36,11 @@ type awsCRs struct {
 	encryptionSecret *corev1.Secret
 	release          *release.Release
 
-	cluster    *capi.Cluster
-	awsCluster *giantswarmawsalpha3.AWSCluster
+	cluster             *capi.Cluster
+	awsCluster          *giantswarmawsalpha3.AWSCluster
+	awsControlPlane     *giantswarmawsalpha3.AWSControlPlane
+	g8sControlPlane     *giantswarmawsalpha3.G8sControlPlane
+	kubeadmControlPlane *kubeadm.KubeadmControlPlane
 
 	awsMachineDeployments []giantswarmawsalpha3.AWSMachineDeployment
 }
@@ -187,7 +191,12 @@ func (m *awsMigrator) readCRs(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	err = m.readMachinePools(ctx)
+	err = m.readAWSControlPlane(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readG8sControlPlane(ctx)
 	if err != nil {
 		return microerror.Mask(err)
 	}
