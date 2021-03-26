@@ -36,8 +36,11 @@ type awsCRs struct {
 	encryptionSecret *corev1.Secret
 	release          *release.Release
 
-	cluster             *capi.Cluster
-	awsCluster          *giantswarmawsalpha3.AWSCluster
+	cluster    *capi.Cluster
+	awsCluster *giantswarmawsalpha3.AWSCluster
+
+	awsControlPlane     *giantswarmawsalpha3.AWSControlPlane
+	g8sControlPlane     *giantswarmawsalpha3.G8sControlPlane
 	kubeadmControlPlane *kubeadm.KubeadmControlPlane
 
 	machinePools    []capiexp.MachinePool
