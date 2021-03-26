@@ -106,13 +106,12 @@ func (m *awsMigrator) createCustomFilesSecret(ctx context.Context) error {
 
 func (m *awsMigrator) createKubeadmControlPlane(ctx context.Context) error {
 	replicas := int32(1)
-	namespace := "default"
 	releaseComponents := getReleaseComponents(m.crs.release)
 
 	kcp := &kubeadm.KubeadmControlPlane{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      key.AWSKubeadmControlPlaneName(m.clusterID),
-			Namespace: namespace,
+			Namespace: m.crs.g8sControlPlane.Namespace,
 		},
 		Spec: kubeadm.KubeadmControlPlaneSpec{
 			InfrastructureTemplate: corev1.ObjectReference{
