@@ -38,6 +38,8 @@
 
 ## Development
 
+### Running locally
+
 To try things quickly you can run `make run`. That will run `main.go` against
 a current kubectl context (i.e. `kubectl config current-context`).
 
@@ -50,3 +52,17 @@ export export VAULT_CAPATH="/..."
 
 make run
 ```
+
+### Helm chart
+
+The helm chart templates are generated using kustomize overlay stored in
+`/config/helm`. To re-generate templates run `make manifests`.
+
+To add a new configuration value:
+
+1. Add a new flag in `main.go`. Bind the flag and bind the flag value.
+2. Add a new key (with the name equal to the new flag name) to either
+   `config/helm/config.yaml` or `config/helm/secret.yaml`.
+3. Add a new key in `helm/*/values.yaml` that is used as a value for the key in
+   CM/Secret.
+4. Regenerate templates using `make manifests`.

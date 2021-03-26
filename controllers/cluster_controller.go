@@ -25,28 +25,38 @@ import (
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
 	"github.com/giantswarm/micrologger/loggermeta"
+	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
 	vaultapi "github.com/hashicorp/vault/api"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	capiv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
+
+	"github.com/giantswarm/capi-migration/pkg/meta"
+	"github.com/giantswarm/capi-migration/pkg/migration"
 )
 
 // ClusterReconciler reconciles a Cluster object
 type ClusterReconciler struct {
 	client.Client
-	Log         micrologger.Logger
-	VaultClient *vaultapi.Client
-	Scheme      *runtime.Scheme
+	Log             micrologger.Logger
+	MigratorFactory migration.MigratorFactory
+	TenantCluster   tenantcluster.TenantCluster
+	VaultClient     *vaultapi.Client
+	Scheme          *runtime.Scheme
 
 	loopSeq int64
 }
 
-// +kubebuilder:rbac:groups=cluster.x-k8s.io.giantswarm.io,resources=clusters,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cluster.x-k8s.io.giantswarm.io,resources=clusters/status,verbs=get;update;patch
 
-func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	// TODO get context as parameter as soon as we bump sigs.k8s.io/controller-runtime to 0.7+.
+	ctx := context.Background()
+
 	meta := loggermeta.New()
 	meta.KeyVals = map[string]string{
 		"controller": "cluster",
@@ -86,11 +96,57 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&capiv1alpha3.Cluster{}).
+		WithEventFilter(predicate.NewPredicateFuncs(meta.Label.Version.Predicate)).
 		Complete(r)
 }
 
 func (r *ClusterReconciler) reconcile(ctx context.Context, cluster *capiv1alpha3.Cluster) (ctrl.Result, error) {
 	r.Log.Debugf(ctx, "calling reconcile")
+
+	migrator, err := r.MigratorFactory.NewMigrator(cluster)
+	if err != nil {
+		return ctrl.Result{}, microerror.Mask(err)
+	}
+
+	alreadyMigrated, err := migrator.IsMigrated(ctx)
+	if err != nil {
+		return ctrl.Result{}, microerror.Mask(err)
+	}
+
+	if alreadyMigrated {
+		r.Log.Debugf(ctx, "cluster is already migrated")
+		// Migration performed. Cleanup.
+		err = migrator.Cleanup(ctx)
+		if err != nil {
+			return ctrl.Result{}, microerror.Mask(err)
+		}
+
+		return ctrl.Result{}, nil
+	}
+
+	migrating, err := migrator.IsMigrating(ctx)
+	if err != nil {
+		return ctrl.Result{}, microerror.Mask(err)
+	}
+
+	if migrating {
+		// Migration has been triggered but it's not complete yet.
+		r.Log.Debugf(ctx, "cluster migration is in progress")
+		return ctrl.Result{}, nil
+	}
+
+	r.Log.Debugf(ctx, "preparing cluster migration")
+	err = migrator.Prepare(ctx)
+	if err != nil {
+		return ctrl.Result{}, microerror.Mask(err)
+	}
+
+	r.Log.Debugf(ctx, "triggering cluster migration")
+	err = migrator.TriggerMigration(ctx)
+	if err != nil {
+		return ctrl.Result{}, microerror.Mask(err)
+	}
+
 	return ctrl.Result{}, nil
 }
 

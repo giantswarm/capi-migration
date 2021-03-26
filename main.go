@@ -18,24 +18,37 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	providerv1alpha1 "github.com/giantswarm/apiextensions/v3/pkg/apis/provider/v1alpha1"
+	releasev1alpha1 "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
+	"github.com/giantswarm/certs/v3/pkg/certs"
+	"github.com/giantswarm/k8sclient/v4/pkg/k8sclient"
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
+	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
 	vaultapi "github.com/hashicorp/vault/api"
+	flag "github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	capiv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	capzv1alpha3 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
+	expcapzv1alpha3 "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
+	bootstrapkubeadmv1alpha3 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
+	controlplanekubeadmv1alpha3 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
+	expcapiv1alpha3 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	capiv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	// +kubebuilder:scaffold:imports
 
 	"github.com/giantswarm/capi-migration/controllers"
+	"github.com/giantswarm/capi-migration/pkg/migration"
 )
 
 var (
@@ -46,40 +59,106 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = capiv1alpha3.AddToScheme(scheme)
+	_ = providerv1alpha1.AddToScheme(scheme)
+	_ = capzv1alpha3.AddToScheme(scheme)
+	_ = expcapiv1alpha3.AddToScheme(scheme)
+	_ = expcapzv1alpha3.AddToScheme(scheme)
+	_ = releasev1alpha1.AddToScheme(scheme)
+	_ = bootstrapkubeadmv1alpha3.AddToScheme(scheme)
+	_ = controlplanekubeadmv1alpha3.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
 var flags = struct {
-	EnableLeaderElection bool
-	MetricsAddr          string
-	VaultAddr            string
-	VaultToken           string
+	LeaderElect        bool
+	MetricsBindAddress string
+	Provider           string
+	VaultAddr          string
+	VaultToken         string
 }{}
 
-func initFlags() {
-	flag.BoolVar(&flags.EnableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
-	flag.StringVar(&flags.VaultAddr, "vault-addr", os.Getenv("VAULT_ADDR"), "The address of the vault to connect to. Defaults to VAULT_ADDR.")
-	flag.StringVar(&flags.VaultToken, "vault-token", os.Getenv("VAULT_TOKEN"), "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
-	flag.StringVar(&flags.MetricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+func initFlags() (errors []error) {
+	var configPaths []string
+	flag.StringArrayVar(&configPaths, "config", []string{}, "List of paths to configuration file in yaml format with flat, kebab-case keys.")
+
+	// Flag/configuration names.
+	const (
+		flagLeaderElect       = "leader-elect"
+		flagMetricsBindAddres = "metrics-bind-address"
+		flagProvider          = "provider"
+		flagVaultAddr         = "vault-addr"
+		flagVaultToken        = "vault-token"
+	)
+
+	// TODO helm chart
+
+	// Flag binding.
+	flag.Bool(flagLeaderElect, false, "Enable leader election for controller manager.")
+	flag.String(flagMetricsBindAddres, ":8080", "The address the metric endpoint binds to.")
+	flag.String(flagProvider, "", "Provider name for the migration.")
+	flag.String("vault-addr", "", "The address of the vault to connect to. Defaults to VAULT_ADDR.")
+	viper.BindEnv(flagVaultAddr, "VAULT_ADDR")
+	flag.String("vault-token", "", "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
+	viper.BindEnv(flagVaultAddr, "VAULT_TOKEN")
+
+	// Parse flags and configuration.
 	flag.Parse()
+	if err := initViper(configPaths); err != nil {
+		errors = append(errors, fmt.Errorf("failed to read configuration with error: %s", err))
+		return
+	}
 
-	var errors []string
+	// Value binding.
+	flags.LeaderElect = viper.GetBool(flagLeaderElect)
+	flags.MetricsBindAddress = viper.GetString(flagMetricsBindAddres)
+	flags.Provider = viper.GetString(flagProvider)
+	flags.VaultAddr = viper.GetString(flagVaultAddr)
+	flags.VaultToken = viper.GetString(flagVaultToken)
 
+	// Validation.
+
+	if flags.Provider != "aws" && flags.Provider != "azure" {
+		errors = append(errors, fmt.Errorf("--%s must be either \"aws\" or \"azure\"", flagProvider))
+	}
 	if flags.VaultAddr == "" {
-		errors = append(errors, "--vault-addr flag or VAULT_ADDR environment variable must be set")
+		errors = append(errors, "--%s flag or VAULT_ADDR environment variable must be set", flagVaultAddr)
 	}
 	if flags.VaultToken == "" {
-		errors = append(errors, "--vault-token flag or VAULT_TOKEN environment variable must be set")
+		errors = append(errors, "--%s flag or VAULT_TOKEN environment variable must be set", flagVaultToken)
 	}
 
-	if len(errors) > 1 {
-		fmt.Fprintf(os.Stderr, "%s\n", strings.Join(errors, "\n"))
-		os.Exit(2)
+	return
+}
+
+func initViper(configPaths []string) (errors []error) {
+	viper.BindPFlags(flag.CommandLine)
+
+	if len(configPaths) == 0 {
+		return nil
 	}
+	for _, p := range configPaths {
+		viper.AddConfigPath(p)
+	}
+	err := viper.ReadInConfig()
+	if err != nil {
+		errors = append(errors, err)
+		return
+	}
+
+	return
 }
 
 func main() {
-	initFlags()
+	errs := initFlags()
+	if len(errs) > 0 {
+		ss := make([]string, len(errs))
+		for i := range errs {
+			ss[i] = errs[i].Error()
+		}
+		fmt.Fprintf(os.Stderr, "Error: %s\n", strings.Join(ss, "\n Error:"))
+		os.Exit(2)
+	}
+
 	err := mainE(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", microerror.Pretty(err, true))
@@ -97,9 +176,9 @@ func mainE(ctx context.Context) error {
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
-		MetricsBindAddress: flags.MetricsAddr,
+		MetricsBindAddress: flags.MetricsBindAddress,
 		Port:               9443,
-		LeaderElection:     flags.EnableLeaderElection,
+		LeaderElection:     flags.LeaderElect,
 		LeaderElectionID:   "2db8ae24.giantswarm.io",
 	})
 	if err != nil {
@@ -122,11 +201,75 @@ func mainE(ctx context.Context) error {
 			return microerror.Mask(err)
 		}
 	}
+	var certsSearcher *certs.Searcher
+	{
+		clients, err := k8sclient.NewClients(k8sclient.ClientsConfig{
+			Logger:     log,
+			RestConfig: mgr.GetConfig(),
+		})
+		if err != nil {
+			return microerror.Mask(err)
+		}
+
+		c := certs.Config{
+			K8sClient: clients.K8sClient(),
+			Logger:    log,
+
+			WatchTimeout: 30 * time.Second,
+		}
+
+		certsSearcher, err = certs.NewSearcher(c)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
+
+	var tenantCluster *tenantcluster.TenantCluster
+	{
+		tenantCluster, err = tenantcluster.New(tenantcluster.Config{
+			CertsSearcher: certsSearcher,
+			Logger:        log,
+			CertID:        certs.APICert,
+		})
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
+
+	var migratorFactory migration.MigratorFactory
+	{
+		switch flags.Provider {
+		case "aws":
+			migratorFactory, err = migration.NewAWSMigratorFactory(migration.AWSMigrationConfig{
+				CtrlClient:    mgr.GetClient(),
+				Logger:        log,
+				TenantCluster: tenantCluster,
+			})
+
+			if err != nil {
+				return microerror.Mask(err)
+			}
+		case "azure":
+			migratorFactory, err = migration.NewAzureMigratorFactory(migration.AzureMigrationConfig{
+				CtrlClient:    mgr.GetClient(),
+				Logger:        log,
+				TenantCluster: tenantCluster,
+			})
+			if err != nil {
+				return microerror.Mask(err)
+			}
+		default:
+			return microerror.Mask(fmt.Errorf("unknown provider %#q", flags.Provider))
+		}
+
+	}
+
 	if err = (&controllers.ClusterReconciler{
-		Client:      mgr.GetClient(),
-		Log:         log,
-		VaultClient: vaultClient,
-		Scheme:      mgr.GetScheme(),
+		Client:          mgr.GetClient(),
+		Log:             log,
+		MigratorFactory: migratorFactory,
+		VaultClient:     vaultClient,
+		Scheme:          mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		return microerror.Mask(err)
 	}

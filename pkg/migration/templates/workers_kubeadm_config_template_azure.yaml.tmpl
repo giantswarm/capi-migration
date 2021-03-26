@@ -1,0 +1,71 @@
+kind: KubeadmConfigTemplate
+metadata:
+  name: {{.ClusterID}}-md-0
+  namespace: default
+spec:
+  template:
+    spec:
+      files:
+      - contentFrom:
+          secret:
+            key: worker-node-azure.json
+            name: {{.ClusterID}}-md-0-azure-json
+        owner: root:root
+        path: /etc/kubernetes/azure.json
+        permissions: "0644"
+      - content: |
+          [Unit]
+          Description=Setup iptables Nat rules for Azure CNI
+          Wants=systemd-networkd.service
+          After=systemd-networkd.service
+          [Service]
+          Type=oneshot
+          ExecStart=/bin/sh -c "iptables -t nat -A POSTROUTING -m addrtype ! --dst-type local ! -d 10.2.0.0/16 -j MASQUERADE"
+          [Install]
+          WantedBy=multi-user.target
+        owner: root:root
+        path: /etc/systemd/system/azure-cni-nat-rules.service
+        permissions: "0644"
+      - content: "whites ALL = (ALL) NOPASSWD: ALL"
+        owner: root:root
+        path: /etc/sudoers.d/whites
+        permissions: "0440"
+      - content: "tuommaki ALL = (ALL) NOPASSWD: ALL"
+        owner: root:root
+        path: /etc/sudoers.d/tuommaki
+        permissions: "0440"
+      - contentFrom:
+          secret:
+            name: {{.ClusterID}}-proxy-config
+            key: proxy
+        owner: root:root
+        path: "/etc/kubernetes/config/proxy-config.yml"
+        permissions: "0644"
+      - contentFrom:
+          secret:
+            name: {{.ClusterID}}-kubeconfig
+            key: value
+        owner: root:root
+        path: "/etc/kubernetes/config/proxy-kubeconfig.yaml"
+        permissions: "0644"
+      preKubeadmCommands:
+      - "/bin/systemctl enable azure-cni-nat-rules.service"
+      - "/bin/systemctl start azure-cni-nat-rules.service"
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cloud-config: /etc/kubernetes/azure.json
+            cloud-provider: azure
+          name: {{ `'{{ ds.meta_data["local_hostname"] }}'` }}
+      mounts:
+      - - LABEL=etcd_disk
+        - /var/lib/etcddisk
+      useExperimentalRetryJoin: true
+      users:
+      - name: whites
+        sshAuthorizedKeys:
+        - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC7tf8jCm827wKhbBUh0xT/2D954cO54sOJ5/vn5sZSDIkxErMUCKH5WZSEjh3iAaKeq8wAn6XpXYvCwRu62csO1vu5l3Wh/kLnYo+1ALLoL8jM4VdKUiv4jOaM2ZL/UR5j1rt5L0kK3//kjtCXMlwyjpBxH9crJPA1lnmUdADDN+XBZ1x4EmpWwR8eV2CiYLU7sylF9V0R1bObUptpvOeYb/B3T1H9GSFgpVSQzvtI/OEZmoSzBz7VdJiIfGTwUKEcEr+9WBpVD5quLmG0LdwQ68dBeTjIaj4A5PYfu9iiNTKNiqDEIWtIkoVLo7PxZJblrYPQPYFycnUJeLHngZYmX12TBPcl3xQPdxyPeTGz4KBa0jfeWdHi7JkaOHtrmQvF0wcj3REEZYMJKz/8tMA4tqP5AnvTudZgNGHXtO9kiGhG5rn3dWTr6R+crRuWszQVVasx4IEKMOwdxc8sgmx1W0mPetKDUh6siFF3TRu0KcJ9BDrHGciWMkfXQgP4txIRgvPHGJmoywRQ3zoN0hWzjI6bEaUvRVEyk0u0dreTmTiG6JFcSaSMJWZvuhvKCKTbp1ysITzH7EIJwQ2nfSz88j4tVRfXA/BSxOc4aR6l3j1zApSfV7mVag9TSPfMVdXWEoOlpdiQH/V0Mm5ummkQ1JloDGBRKR0AuKUrGtkKfw== cardno:000611038607"
+      - name: tuommaki
+        sshAuthorizedKeys:
+        - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCcSLjqSNw62kEa/QsfdOCabBIAyorVYJRTYz6x0w0IR0TAZiVonG3LQDIoRB8FC+8yvcTNxW/42ZO+xTyc9nzi+vxo6EO94rWWfYCcKohH3G/mIr5MuxKjbwobwV6DIJe6tWJplKc1pFnYsd4dexU+BFdO7rOWGTqZjyVbpiZzfknID61bHVwbY93UaD86kuuhbHiRGDtov1GL5gOjHecxCk4s5gOVyZJb6qDJTySlbEUomiLBJnzRlXG6Gh/Ed+vybyarexWppnWuG4xIBp5PtLBLndspPbRaXdb1daW0q3vgbJQ5S82tyNlgDvRKPnyHbbFS2BcebTKKgYRNxx42fZr6yiio7+mdcKoxqmdckvOpNZcwrszZgyH+hC8rHVHwzMEWUY/25SL0Gx6fWkH2QeMrw1UU3qCVrho8NcFUB2d7Gke7oD93qOYEVoGtKSkX694bW+p8gOD/OPL0hNv6sxmKvIdb3UuOEbJbbsh6UsVrHW/n5Y8Rs+gJhkP752k= tuommaki@airbag"
+

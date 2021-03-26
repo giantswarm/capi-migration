@@ -11,8 +11,6 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-all: manager
-
 # Run tests
 test: generate fmt vet manifests
 	go test ./... -coverprofile cover.out
@@ -21,30 +19,47 @@ test: generate fmt vet manifests
 manager: generate fmt vet
 	go build -o bin/manager main.go
 
+run:
+	@echo "Deprecated: use \"make run-aws\" or \"make run-azure\"" >&2 && exit 1
+
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: generate fmt vet manifests
-	go run ./main.go
+run-aws: generate fmt vet manifests
+	go run ./main.go --provider=aws
 
-# Install CRDs into a cluster
-install: manifests
-	kustomize build config/crd | kubectl apply -f -
-
-# Uninstall CRDs from a cluster
-uninstall: manifests
-	kustomize build config/crd | kubectl delete -f -
+# Run against the configured Kubernetes cluster in ~/.kube/config
+run-azure: generate fmt vet manifests
+	go run ./main.go --provider=azure
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy: manifests
+deploy:
+	@echo "Deprecated: use \"make deploy-aws\" or \"make deploy-azure\"" >&2 && exit 1
+
+# Deploy controller in the configured Kubernetes cluster in ~/.kube/config
+deploy-aws: manifests
 	cd config/dev && kustomize edit set image controller=${IMG}
-	kustomize build config/dev | kubectl apply -f -
+	kustomize build config/dev-aws | kubectl apply -f -
+
+deploy-azure: manifests
+	cd config/dev && kustomize edit set image controller=${IMG}
+	kustomize build config/dev-azure | kubectl apply -f -
+
+undeploy:
+	@echo "Deprecated: use \"make undeploy-aws\" or \"make undeploy-azure\"" >&2 && exit 1
 
 # Undeploy controller in the configured Kubernetes cluster in ~/.kube/config
-undeploy: manifests
-	kustomize build config/dev | kubectl delete -f -
+undeploy-aws: manifests
+	kustomize build config/dev-aws | kubectl delete -f -
+
+# Undeploy controller in the configured Kubernetes cluster in ~/.kube/config
+undeploy-azure: manifests
+	kustomize build config/dev-azure | kubectl delete -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
+manifests: CHART_TEMPLATE_FILE := $(shell ls -d helm/$$(basename $$(go list -m)))/templates/kustomize-out.yaml
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	mkdir -p $(shell dirname $(CHART_TEMPLATE_FILE))
+	kustomize build config/helm -o '$(CHART_TEMPLATE_FILE)'
 
 # Run go fmt against code
 fmt:
