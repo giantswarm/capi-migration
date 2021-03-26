@@ -127,6 +127,9 @@ func (m *azureMigrator) ensureLegacyNodePoolsAreDeleted(ctx context.Context) err
 	{
 		workers := v1.NodeList{}
 		err = m.wcCtrlClient.List(ctx, &workers, client.MatchingLabels{})
+		if err != nil {
+			return microerror.Mask(err)
+		}
 
 		var readyCAPIworkers int
 		for _, node := range workers.Items {
