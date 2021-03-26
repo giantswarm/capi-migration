@@ -90,15 +90,13 @@ func initFlags() (errors []error) {
 		flagVaultToken        = "vault-token"
 	)
 
-	// TODO helm chart
-
 	// Flag binding.
 	flag.Bool(flagLeaderElect, false, "Enable leader election for controller manager.")
 	flag.String(flagMetricsBindAddres, ":8080", "The address the metric endpoint binds to.")
 	flag.String(flagProvider, "", "Provider name for the migration.")
-	flag.String("vault-addr", "", "The address of the vault to connect to. Defaults to VAULT_ADDR.")
+	flag.String(flagVaultAddr, "", "The address of the vault to connect to. Defaults to VAULT_ADDR.")
 	viper.BindEnv(flagVaultAddr, "VAULT_ADDR")
-	flag.String("vault-token", "", "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
+	flag.String(flagVaultToken, "", "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
 	viper.BindEnv(flagVaultAddr, "VAULT_TOKEN")
 
 	// Parse flags and configuration.
@@ -121,10 +119,10 @@ func initFlags() (errors []error) {
 		errors = append(errors, fmt.Errorf("--%s must be either \"aws\" or \"azure\"", flagProvider))
 	}
 	if flags.VaultAddr == "" {
-		errors = append(errors, "--%s flag or VAULT_ADDR environment variable must be set", flagVaultAddr)
+		errors = append(errors, fmt.Errorf("--%s flag or VAULT_ADDR environment variable must be set", flagVaultAddr))
 	}
 	if flags.VaultToken == "" {
-		errors = append(errors, "--%s flag or VAULT_TOKEN environment variable must be set", flagVaultToken)
+		errors = append(errors, fmt.Errorf("--%s flag or VAULT_TOKEN environment variable must be set", flagVaultToken))
 	}
 
 	return
