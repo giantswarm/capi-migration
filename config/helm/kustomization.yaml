@@ -28,10 +28,3 @@ resources:
 
 patchesStrategicMerge:
   - manager_patch.yaml
-
-configMapGenerator:
-  - name: controller-manager
-    namespace: system
-    behavior: replace
-    files:
-      - config.yaml
