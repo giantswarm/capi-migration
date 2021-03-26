@@ -13,10 +13,10 @@ spec:
             - --config=/var/run/controller-manager/secret.yaml
           volumeMounts:
             - name: controller-manager-cm
-              mountPath: /var/run/controller-manager/config.yaml
+              mountPath: /var/run/controller-manager/
               readOnly: true
             - name: controller-manager-secret
-              mountPath: /var/run/controller-manager/secret.yaml
+              mountPath: /var/run/controller-manager/
               readOnly: true
       volumes:
         - name: controller-manager-cm
