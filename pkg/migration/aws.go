@@ -21,10 +21,12 @@ import (
 )
 
 type AWSMigrationConfig struct {
+
 	// Migration configuration + dependencies such as k8s client.
-	CtrlClient    ctrl.Client
-	Logger        micrologger.Logger
-	TenantCluster tenantcluster.Interface
+	CtrlClient     ctrl.Client
+	Logger         micrologger.Logger
+	TenantCluster  tenantcluster.Interface
+	AWSCredentials AWSConfig
 }
 
 type awsMigratorFactory struct {
@@ -44,7 +46,9 @@ type awsCRs struct {
 }
 
 type awsMigrator struct {
-	clusterID string
+	awsClients     *awsClients
+	awsCredentials AWSConfig
+	clusterID      string
 
 	crs awsCRs
 
@@ -77,7 +81,9 @@ func (f *awsMigratorFactory) NewMigrator(cluster *v1alpha3.Cluster) (Migrator, e
 	}
 
 	return &awsMigrator{
-		clusterID: cluster.Name,
+		awsCredentials: f.config.AWSCredentials,
+		clusterID:      cluster.Name,
+
 		// rest of the config from f.config...
 		logger:       f.config.Logger,
 		mcCtrlClient: f.config.CtrlClient,
