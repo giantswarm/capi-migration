@@ -38,6 +38,15 @@
 
 ## Development
 
+### Running locally
+
+To try things quickly you can run `make run`. That will run `main.go` against
+a current kubectl context (i.e. `kubectl config current-context`).
+
+All flags that can be passed to the `main.go` can be also passed as environment
+variables prefixed with `CAPI_MIGRATION_`. E.g. `--provider=azure` can be
+set using `CAPI_MIGRATION_PROVIDER=azure make run`.
+
 ### Helm chart
 
 The helm chart templates are generated using kustomize overlay stored in

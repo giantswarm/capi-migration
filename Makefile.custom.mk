@@ -15,17 +15,6 @@ endif
 manager: generate fmt vet
 	go build -o bin/manager main.go
 
-run:
-	@echo "Deprecated: use \"make run-aws\" or \"make run-azure\"" >&2 && exit 1
-
-# Run against the configured Kubernetes cluster in ~/.kube/config
-run-aws: generate fmt vet manifests
-	go run ./main.go --provider=aws
-
-# Run against the configured Kubernetes cluster in ~/.kube/config
-run-azure: generate fmt vet manifests
-	go run ./main.go --provider=azure
-
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy:
 	@echo "Deprecated: use \"make deploy-aws\" or \"make deploy-azure\"" >&2 && exit 1

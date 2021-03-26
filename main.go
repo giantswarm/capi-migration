@@ -29,7 +29,6 @@ import (
 	"github.com/giantswarm/k8sclient/v4/pkg/k8sclient"
 	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
 	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -43,6 +42,7 @@ import (
 
 	"github.com/giantswarm/capi-migration/controllers"
 	"github.com/giantswarm/capi-migration/pkg/migration"
+	"github.com/giantswarm/capi-migration/pkg/project"
 
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
@@ -88,32 +88,22 @@ func initFlags() (errors []error) {
 	// Flag/configuration names.
 	const (
 		flagAWSAccessKeyID     = "aws-access-id"
-		flagAWSAccessKeySecret = "aws-access-secret" /* #nosec */
+		flagAWSAccessKeySecret = "aws-access-secret" //lint:nosec
 		flagLeaderElect        = "leader-elect"
 		flagMetricsBindAddres  = "metrics-bind-address"
 		flagProvider           = "provider"
 	)
 
 	// Flag binding.
-	flag.String(flagAWSAccessKeyID, "", "AWS access key for MC.")
-	flag.String(flagAWSAccessKeySecret, "", "AWS secret key for MC.")
-	flag.Bool(flagLeaderElect, false, "Enable leader election for controller manager.")
-	flag.String(flagMetricsBindAddres, ":8080", "The address the metric endpoint binds to.")
-	flag.String(flagProvider, "", "Provider name for the migration.")
+	flag.StringVar(&flags.AWSAccessKeyID, flagAWSAccessKeyID, "", "AWS access key for MC.")
+	flag.StringVar(&flags.AWSAccessKeySecret, flagAWSAccessKeySecret, "", "AWS secret key for MC.")
+	flag.BoolVar(&flags.LeaderElect, flagLeaderElect, false, "Enable leader election for controller manager.")
+	flag.StringVar(&flags.MetricsBindAddress, flagMetricsBindAddres, ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&flags.Provider, flagProvider, "", "Provider name for the migration.")
 
 	// Parse flags and configuration.
 	flag.Parse()
-	if err := initViper(configPaths); err != nil {
-		errors = append(errors, fmt.Errorf("failed to read configuration with error: %s", err))
-		return
-	}
-
-	// Value binding.
-	flags.AWSAccessKeyID = viper.GetString(flagAWSAccessKeyID)
-	flags.AWSAccessKeySecret = viper.GetString(flagAWSAccessKeySecret)
-	flags.LeaderElect = viper.GetBool(flagLeaderElect)
-	flags.MetricsBindAddress = viper.GetString(flagMetricsBindAddres)
-	flags.Provider = viper.GetString(flagProvider)
+	errors = append(errors, initFlagsFromEnv()...)
 
 	// Validation.
 
@@ -127,24 +117,24 @@ func initFlags() (errors []error) {
 	return
 }
 
-func initViper(configPaths []string) (errors []error) {
-	err := viper.BindPFlags(flag.CommandLine)
-	if err != nil {
-		errors = append(errors, err)
-		return
-	}
-
-	if len(configPaths) == 0 {
-		return nil
-	}
-	for _, p := range configPaths {
-		viper.AddConfigPath(p)
-	}
-	err = viper.ReadInConfig()
-	if err != nil {
-		errors = append(errors, err)
-		return
-	}
+func initFlagsFromEnv() (errors []error) {
+	flag.CommandLine.VisitAll(func(f *flag.Flag) {
+		if f.Changed {
+			return
+		}
+		env := project.Name() + "_" + f.Name
+		env = strings.ReplaceAll(env, ".", "_")
+		env = strings.ReplaceAll(env, "-", "_")
+		env = strings.ToUpper(env)
+		v, ok := os.LookupEnv(env)
+		if !ok {
+			return
+		}
+		err := f.Value.Set(v)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("failed to set --%s value using %q environment variable", f.Name, env))
+		}
+	})
 
 	return
 }
@@ -156,7 +146,7 @@ func main() {
 		for i := range errs {
 			ss[i] = errs[i].Error()
 		}
-		fmt.Fprintf(os.Stderr, "Error: %s\n", strings.Join(ss, "\n Error:"))
+		fmt.Fprintf(os.Stderr, "Error: %s\n", strings.Join(ss, "\nError: "))
 		os.Exit(2)
 	}
 
