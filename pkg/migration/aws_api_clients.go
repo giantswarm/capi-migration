@@ -30,34 +30,6 @@ type awsClients struct {
 	route53Client *route53.Route53
 }
 
-func getAWSClients(config AWSConfig) (*awsClients, error) {
-	var err error
-	var s *session.Session
-	{
-		c := &aws.Config{
-			Credentials: credentials.NewStaticCredentials(config.AccessKeyID, config.AccessKeySecret, ""),
-			Region:      aws.String(config.Region),
-		}
-
-		s, err = session.NewSession(c)
-		if err != nil {
-			return nil, microerror.Mask(err)
-		}
-	}
-
-	credentialsConfig := &aws.Config{
-		Credentials: stscreds.NewCredentials(s, config.RoleARN),
-	}
-
-	o := &awsClients{
-		ec2Client:     ec2.New(s, credentialsConfig),
-		route53Client: route53.New(s, credentialsConfig),
-		asgClient:     autoscaling.New(s, credentialsConfig),
-	}
-
-	return o, nil
-}
-
 // createAWSApiClients create all necessary aws api clients fro later use
 func (m *awsMigrator) createAWSApiClients(ctx context.Context) error {
 	arn, err := m.getClusterCredentialARN(ctx, m.crs.awsCluster)
@@ -87,4 +59,32 @@ func (m *awsMigrator) getClusterCredentialARN(ctx context.Context, cr *giantswar
 	}
 
 	return string(secret.Data["aws.awsoperator.arn"]), nil
+}
+
+func getAWSClients(config AWSConfig) (*awsClients, error) {
+	var err error
+	var s *session.Session
+	{
+		c := &aws.Config{
+			Credentials: credentials.NewStaticCredentials(config.AccessKeyID, config.AccessKeySecret, ""),
+			Region:      aws.String(config.Region),
+		}
+
+		s, err = session.NewSession(c)
+		if err != nil {
+			return nil, microerror.Mask(err)
+		}
+	}
+
+	credentialsConfig := &aws.Config{
+		Credentials: stscreds.NewCredentials(s, config.RoleARN),
+	}
+
+	o := &awsClients{
+		ec2Client:     ec2.New(s, credentialsConfig),
+		route53Client: route53.New(s, credentialsConfig),
+		asgClient:     autoscaling.New(s, credentialsConfig),
+	}
+
+	return o, nil
 }
