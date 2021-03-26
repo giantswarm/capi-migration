@@ -351,77 +351,78 @@ func (m *awsMigrator) createWorkersKubeadmConfigTemplate(ctx context.Context) er
 }
 
 func (m *awsMigrator) createWorkersAWSMachinePools(ctx context.Context) error {
-	i := &ec2.DescribeSecurityGroupsInput{
-		Filters: []*ec2.Filter{
-			{
-				Name:   aws.String("tag:Name"),
-				Values: aws.StringSlice([]string{fmt.Sprintf("%s-worker", m.clusterID)}),
+	// iterate over all nodepools (AWSMachineDeployments)
+	for _, d := range m.crs.awsMachineDeployments {
+		// FETCH AWS INFO
+		i := &ec2.DescribeSecurityGroupsInput{
+			Filters: []*ec2.Filter{
+				{
+					Name:   aws.String("tag:Name"),
+					Values: aws.StringSlice([]string{fmt.Sprintf("%s-worker", m.clusterID)}),
+				},
+				{
+					Name:   aws.String("tag:giantswarm.io/machine-deployment"),
+					Values: aws.StringSlice([]string{d.Name}),
+				},
 			},
-			{
-				Name:   aws.String("tag:giantswarm.io/machine-deployment"),
-				Values: aws.StringSlice([]string{d.Name}),
+		}
+
+		o, err := m.awsClients.ec2Client.DescribeSecurityGroups(i)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+		if len(o.SecurityGroups) != 1 {
+			return microerror.Maskf(nil, "expected 1 master security group but found %d", len(o.SecurityGroups))
+		}
+
+		i2 := &ec2.DescribeSubnetsInput{
+			Filters: []*ec2.Filter{
+				{
+					Name:   aws.String("tag:giantswarm.io/machine-deployment"),
+					Values: aws.StringSlice([]string{d.Name}),
+				},
 			},
-		},
-	}
+		}
 
-	o, err := ec2Client.DescribeSecurityGroups(i)
-	if err != nil {
-		return nil, microerror.Mask(err)
-	}
-	if len(o.SecurityGroups) != 1 {
-		return nil, microerror.Maskf(nil, "expected 1 master security group but found %d", len(o.SecurityGroups))
-	}
+		o2, err := m.awsClients.ec2Client.DescribeSubnets(i2)
+		if err != nil {
+			return microerror.Mask(err)
+		}
 
-	i2 := &ec2.DescribeSubnetsInput{
-		Filters: []*ec2.Filter{
-			{
-				Name:   aws.String("tag:giantswarm.io/machine-deployment"),
-				Values: aws.StringSlice([]string{d.Name}),
+		// Create the CR
+		awsmp := &capaexp.AWSMachinePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      machinePoolName(clusterID, d.Name),
+				Namespace: d.Namespace,
 			},
-		},
-	}
-
-	o2, err := ec2Client.DescribeSubnets(i2)
-	if err != nil {
-		return nil, microerror.Mask(err)
-	}
-
-	awsmp := &capiawsexpv1alpha3.AWSMachinePool{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "AWSMachinePool",
-			APIVersion: capiawsexpv1alpha3.GroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      machinePoolName(clusterID, d.Name),
-			Namespace: d.Namespace,
-		},
-		Spec: capiawsexpv1alpha3.AWSMachinePoolSpec{
-			MinSize: int32(d.Spec.NodePool.Scaling.Min),
-			MaxSize: int32(d.Spec.NodePool.Scaling.Max),
-			AWSLaunchTemplate: capiawsexpv1alpha3.AWSLaunchTemplate{
-				Name:               d.Name,
-				InstanceType:       d.Spec.Provider.Worker.InstanceType,
-				SSHKeyName:         aws.String("vaclav"),
-				IamInstanceProfile: "nodes.cluster-api-provider-aws.sigs.k8s.io",
-				AdditionalSecurityGroups: []capiawsv1alpha3.AWSResourceReference{
-					{
-						ID: o.SecurityGroups[0].GroupId,
+			Spec: capaexp.AWSMachinePoolSpec{
+				MinSize: int32(d.Spec.NodePool.Scaling.Min),
+				MaxSize: int32(d.Spec.NodePool.Scaling.Max),
+				AWSLaunchTemplate: capaexp.AWSLaunchTemplate{
+					Name:               d.Name,
+					InstanceType:       d.Spec.Provider.Worker.InstanceType,
+					SSHKeyName:         aws.String("vaclav"),
+					IamInstanceProfile: "nodes.cluster-api-provider-aws.sigs.k8s.io",
+					AdditionalSecurityGroups: []capa.AWSResourceReference{
+						{
+							ID: o.SecurityGroups[0].GroupId,
+						},
 					},
 				},
 			},
-		},
-	}
+		}
 
-	for _, subnet := range o2.Subnets {
-		awsmp.Spec.Subnets = append(awsmp.Spec.Subnets, capiawsv1alpha3.AWSResourceReference{ID: subnet.SubnetId})
-		awsmp.Spec.AvailabilityZones = append(awsmp.Spec.AvailabilityZones, *subnet.AvailabilityZone)
-	}
+		for _, subnet := range o2.Subnets {
+			awsmp.Spec.Subnets = append(awsmp.Spec.Subnets, capa.AWSResourceReference{ID: subnet.SubnetId})
+			awsmp.Spec.AvailabilityZones = append(awsmp.Spec.AvailabilityZones, *subnet.AvailabilityZone)
+		}
 
-	err := m.mcCtrlClient.Create(ctx, amt)
-	if apierrors.IsAlreadyExists(err) {
-		// It's ok. It's already there.
-	} else if err != nil {
-		return microerror.Mask(err)
+		err = m.mcCtrlClient.Create(ctx, awsmp)
+		if apierrors.IsAlreadyExists(err) {
+			// It's ok. It's already there.
+		} else if err != nil {
+			return microerror.Mask(err)
+		}
 	}
 
 	return nil
@@ -519,7 +520,7 @@ func (m *awsMigrator) readAWSMachineDeployments(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	m.crs.awsMachinePools = objList.Items
+	m.crs.awsMachineDeployments = objList.Items
 
 	return nil
 }

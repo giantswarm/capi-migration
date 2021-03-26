@@ -16,8 +16,6 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/cluster-api/api/v1alpha3"
 	capi "sigs.k8s.io/cluster-api/api/v1alpha3"
-	kubeadm "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
-	capiexp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -37,12 +35,10 @@ type awsCRs struct {
 	encryptionSecret *corev1.Secret
 	release          *release.Release
 
-	cluster             *capi.Cluster
-	awsCluster          *giantswarmawsalpha3.AWSCluster
-	kubeadmControlPlane *kubeadm.KubeadmControlPlane
+	cluster    *capi.Cluster
+	awsCluster *giantswarmawsalpha3.AWSCluster
 
-	machinePools    []capiexp.MachinePool
-	awsMachinePools []giantswarmawsalpha3.AWSMachineDeployment
+	awsMachineDeployments []giantswarmawsalpha3.AWSMachineDeployment
 }
 
 type awsMigrator struct {
