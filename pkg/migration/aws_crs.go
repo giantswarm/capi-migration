@@ -1,13 +1,10 @@
 package migration
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"github.com/giantswarm/capi-migration/pkg/migration/internal/key"
-	"github.com/giantswarm/capi-migration/pkg/migration/templates"
+
 	"strings"
-	"text/template"
 
 	giantswarmawsalpha3 "github.com/giantswarm/apiextensions/v3/pkg/apis/infrastructure/v1alpha2"
 	release "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
@@ -25,6 +22,9 @@ import (
 	kubeadm "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
 	capiexp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/giantswarm/capi-migration/pkg/migration/internal/key"
+	"github.com/giantswarm/capi-migration/pkg/migration/templates"
 )
 
 const (
@@ -77,7 +77,7 @@ func (m *awsMigrator) createCustomFilesSecret(ctx context.Context) error {
 		ETCDEndpoint: key.AWSEtcdEndpointFromDomain(m.crs.awsCluster.Spec.Cluster.DNS.Domain, m.clusterID),
 	}
 
-	joinEtcdClusterContent, err := renderTemplate(templates.AWSJoinCluster, params)
+	joinEtcdClusterContent, err := templates.RenderTemplate(templates.AWSJoinCluster, params)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -515,15 +515,4 @@ func (m *awsMigrator) updateAWSCluster(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func renderTemplate(tmpl string, params interface{}) (string, error) {
-	var buff bytes.Buffer
-	t := template.Must(template.New("tmpl").Parse(tmpl))
-
-	err := t.Execute(&buff, params)
-	if err != nil {
-		return "", microerror.Mask(err)
-	}
-	return buff.String(), nil
 }

@@ -1,8 +1,26 @@
 package templates
 
+import (
+	"bytes"
+	"text/template"
+
+	"github.com/giantswarm/microerror"
+)
+
 type CustomFilesParams struct {
 	APIEndpoint  string
 	ETCDEndpoint string
+}
+
+func RenderTemplate(tmpl string, params interface{}) (string, error) {
+	var buff bytes.Buffer
+	t := template.Must(template.New("tmpl").Parse(tmpl))
+
+	err := t.Execute(&buff, params)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+	return buff.String(), nil
 }
 
 const AWSJoinCluster = `#!/bin/sh
