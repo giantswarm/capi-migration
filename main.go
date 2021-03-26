@@ -95,9 +95,9 @@ func initFlags() (errors []error) {
 	flag.String(flagMetricsBindAddres, ":8080", "The address the metric endpoint binds to.")
 	flag.String(flagProvider, "", "Provider name for the migration.")
 	flag.String(flagVaultAddr, "", "The address of the vault to connect to. Defaults to VAULT_ADDR.")
-	viper.BindEnv(flagVaultAddr, "VAULT_ADDR")
+	must(microerror.Mask(viper.BindEnv(flagVaultAddr, "VAULT_ADDR")))
 	flag.String(flagVaultToken, "", "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
-	viper.BindEnv(flagVaultAddr, "VAULT_TOKEN")
+	must(microerror.Mask(viper.BindEnv(flagVaultAddr, "VAULT_TOKEN")))
 
 	// Parse flags and configuration.
 	flag.Parse()
@@ -283,4 +283,10 @@ func mainE(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func must(err error) {
+	if err != nil {
+		panic(microerror.Pretty(err, true))
+	}
 }
