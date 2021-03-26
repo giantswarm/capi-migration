@@ -37,8 +37,11 @@ type awsCRs struct {
 	encryptionSecret *corev1.Secret
 	release          *release.Release
 
-	cluster             *capi.Cluster
-	awsCluster          *giantswarmawsalpha3.AWSCluster
+	cluster    *capi.Cluster
+	awsCluster *giantswarmawsalpha3.AWSCluster
+
+	awsControlPlane     *giantswarmawsalpha3.AWSControlPlane
+	g8sControlPlane     *giantswarmawsalpha3.G8sControlPlane
 	kubeadmControlPlane *kubeadm.KubeadmControlPlane
 
 	machinePools    []capiexp.MachinePool
@@ -187,6 +190,16 @@ func (m *awsMigrator) readCRs(ctx context.Context) error {
 	}
 
 	err = m.readAWSCluster(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readAWSControlPlane(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readG8sControlPlane(ctx)
 	if err != nil {
 		return microerror.Mask(err)
 	}
