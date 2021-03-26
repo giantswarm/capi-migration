@@ -18,7 +18,6 @@ import (
 	capaexp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 	capi "sigs.k8s.io/cluster-api/api/v1alpha3"
 	bootstrap "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
-	cabpkv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
 	bootstraptypes "sigs.k8s.io/cluster-api/bootstrap/kubeadm/types/v1beta1"
 	kubeadm "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
 	capiexp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
@@ -372,15 +371,66 @@ func (m *awsMigrator) createMasterAWSMachineTemplate(ctx context.Context) error 
 }
 
 func (m *awsMigrator) createWorkersKubeadmConfigTemplate(ctx context.Context) error {
-	// TODO
+	// iterate over all nodepools (AWSMachineDeployments)
+	for _, d := range m.crs.awsMachineDeployments {
 
-	kct := &cabpkv1.KubeadmConfigTemplate{}
+		c := &bootstrap.KubeadmConfig{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      key.AWSMachinePoolName(m.clusterID, d.Name),
+				Namespace: d.Namespace,
+			},
+			Spec: bootstrap.KubeadmConfigSpec{
+				PreKubeadmCommands: []string{
+					"hostnamectl set-hostname $(curl http://169.254.169.254/latest/meta-data/local-hostname)",
+				},
+				InitConfiguration: &bootstraptypes.InitConfiguration{
+					NodeRegistration: bootstraptypes.NodeRegistrationOptions{
+						KubeletExtraArgs: map[string]string{
+							"cloud-provider": "aws",
+						},
+						Name: "{{ ds.meta_data.local_hostname }}",
+					},
+				},
+				JoinConfiguration: &bootstraptypes.JoinConfiguration{
+					NodeRegistration: bootstraptypes.NodeRegistrationOptions{
+						KubeletExtraArgs: map[string]string{
+							"cloud-provider": "aws",
+							"node-labels":    "node.kubernetes.io/worker,role=worker",
+						},
+						Name: "{{ ds.meta_data.local_hostname }}",
+					},
+				},
+				Files: []bootstrap.File{
+					{
+						Path:  "/etc/kubernetes/config/kube-proxy.yaml",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.AWSCustomFilesSecretName(m.clusterID),
+								Key:  "kubeProxyKubeconfigKey",
+							},
+						},
+					},
+					{
+						Path:  "/etc/kubernetes/config/proxy-config.yml",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.AWSCustomFilesSecretName(m.clusterID),
+								Key:  kubeProxyConfigKey,
+							},
+						},
+					},
+				},
+			},
+		}
 
-	err := m.mcCtrlClient.Create(ctx, kct)
-	if apierrors.IsAlreadyExists(err) {
-		// It's ok. It's already there.
-	} else if err != nil {
-		return microerror.Mask(err)
+		err := m.mcCtrlClient.Create(ctx, c)
+		if apierrors.IsAlreadyExists(err) {
+			// It's ok. It's already there.
+		} else if err != nil {
+			return microerror.Mask(err)
+		}
 	}
 
 	return nil
@@ -465,14 +515,46 @@ func (m *awsMigrator) createWorkersAWSMachinePools(ctx context.Context) error {
 }
 
 func (m *awsMigrator) createWorkersMachinePools(ctx context.Context) error {
-	// TODO
-	md := &capi.MachineDeployment{}
+	k8sVersion := getReleaseComponents(m.crs.release)["K8sVersion"]
 
-	err := m.mcCtrlClient.Create(ctx, md)
-	if apierrors.IsAlreadyExists(err) {
-		// It's ok. It's already there.
-	} else if err != nil {
-		return microerror.Mask(err)
+	for _, d := range m.crs.awsMachineDeployments {
+		mp := &capiexp.MachinePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      key.AWSMachinePoolName(m.clusterID, d.Name),
+				Namespace: d.Namespace,
+			},
+			Spec: capiexp.MachinePoolSpec{
+				ClusterName: m.clusterID,
+				Replicas:    aws.Int32(int32(d.Spec.NodePool.Scaling.Min)),
+				Template: capi.MachineTemplateSpec{
+					Spec: capi.MachineSpec{
+						ClusterName: m.clusterID,
+						Version:     &k8sVersion,
+						InfrastructureRef: corev1.ObjectReference{
+							Name:       key.AWSMachinePoolName(m.clusterID, d.Name),
+							Namespace:  d.Namespace,
+							Kind:       "AWSMachinePool",
+							APIVersion: capiexp.GroupVersion.String(),
+						},
+						Bootstrap: capi.Bootstrap{
+							ConfigRef: &corev1.ObjectReference{
+								Name:       key.AWSMachinePoolName(m.clusterID, d.Name),
+								Namespace:  d.Namespace,
+								Kind:       "KubeadmConfig",
+								APIVersion: bootstrap.GroupVersion.String(),
+							},
+						},
+					},
+				},
+			},
+		}
+
+		err := m.mcCtrlClient.Create(ctx, mp)
+		if apierrors.IsAlreadyExists(err) {
+			// It's ok. It's already there.
+		} else if err != nil {
+			return microerror.Mask(err)
+		}
 	}
 
 	return nil

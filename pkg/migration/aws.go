@@ -231,6 +231,7 @@ func (m *awsMigrator) prepareMissingCRs(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
+	// Create CP
 	err = m.createKubeadmControlPlane(ctx)
 	if err != nil {
 		return microerror.Mask(err)
@@ -241,6 +242,7 @@ func (m *awsMigrator) prepareMissingCRs(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
+	// Create Workers
 	err = m.createWorkersKubeadmConfigTemplate(ctx)
 	if err != nil {
 		return microerror.Mask(err)
