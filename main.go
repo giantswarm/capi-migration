@@ -51,6 +51,11 @@ import (
 	"github.com/giantswarm/capi-migration/pkg/migration"
 )
 
+const (
+	providerAWS   = "aws"
+	providerAzure = "azure"
+)
+
 var (
 	scheme = runtime.NewScheme()
 )
@@ -86,7 +91,7 @@ func initFlags() (errors []error) {
 	// Flag/configuration names.
 	const (
 		flagAWSAccessKeyID     = "aws-access-id"
-		flagAWSAccessKeySecret = "aws-access-secret"
+		flagAWSAccessKeySecret = "aws-access-secret" /* #nosec */
 		flagLeaderElect        = "leader-elect"
 		flagMetricsBindAddres  = "metrics-bind-address"
 		flagProvider           = "provider"
@@ -123,8 +128,8 @@ func initFlags() (errors []error) {
 
 	// Validation.
 
-	if flags.Provider != "aws" && flags.Provider != "azure" {
-		errors = append(errors, fmt.Errorf("--%s must be either \"aws\" or \"azure\"", flagProvider))
+	if flags.Provider != providerAWS && flags.Provider != providerAzure {
+		errors = append(errors, fmt.Errorf("--%s must be either \"%s\" or \"%s\"", flagProvider, providerAWS, providerAzure))
 	}
 	if flags.VaultAddr == "" {
 		errors = append(errors, fmt.Errorf("--%s flag or VAULT_ADDR environment variable must be set", flagVaultAddr))
@@ -132,7 +137,7 @@ func initFlags() (errors []error) {
 	if flags.VaultToken == "" {
 		errors = append(errors, fmt.Errorf("--%s flag or VAULT_TOKEN environment variable must be set", flagVaultToken))
 	}
-	if flags.Provider == "aws" && (flags.AWSAccessKeyID == "" || flags.AWSAccessKeySecret == "") {
+	if flags.Provider == providerAWS && (flags.AWSAccessKeyID == "" || flags.AWSAccessKeySecret == "") {
 		errors = append(errors, fmt.Errorf("when \"aws\" provider is set, --%s and --%s must not be empty", flagAWSAccessKeyID, flagAWSAccessKeySecret))
 	}
 
@@ -252,7 +257,7 @@ func mainE(ctx context.Context) error {
 	var migratorFactory migration.MigratorFactory
 	{
 		switch flags.Provider {
-		case "aws":
+		case providerAWS:
 			migratorFactory, err = migration.NewAWSMigratorFactory(migration.AWSMigrationConfig{
 				AWSCredentials: migration.AWSConfig{
 					AccessKeyID:     flags.AWSAccessKeyID,
@@ -266,7 +271,7 @@ func mainE(ctx context.Context) error {
 			if err != nil {
 				return microerror.Mask(err)
 			}
-		case "azure":
+		case providerAzure:
 			migratorFactory, err = migration.NewAzureMigratorFactory(migration.AzureMigrationConfig{
 				CtrlClient:    mgr.GetClient(),
 				Logger:        log,
