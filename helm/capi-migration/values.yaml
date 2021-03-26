@@ -1,0 +1,12 @@
+leaderElect: false
+metricsBindAddress: ":8080"
+provider: ""
+
+# Generic configuration.
+
+image:
+  name: "giantswarm/capi-migration"
+  tag: "[[ .Version ]]"
+project:
+  branch: "[[ .Branch ]]"
+  commit: "[[ .SHA ]]"

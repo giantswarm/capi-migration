@@ -29,9 +29,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	capiv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 
+	"github.com/giantswarm/capi-migration/pkg/meta"
 	"github.com/giantswarm/capi-migration/pkg/migration"
 )
 
@@ -46,7 +48,7 @@ type ClusterReconciler struct {
 	loopSeq int64
 }
 
-// +kubebuilder:rbac:groups=cluster.x-k8s.io.giantswarm.io,resources=clusters,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cluster.x-k8s.io.giantswarm.io,resources=clusters/status,verbs=get;update;patch
 
 func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -92,6 +94,7 @@ func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&capiv1alpha3.Cluster{}).
+		WithEventFilter(predicate.NewPredicateFuncs(meta.Label.Version.Predicate)).
 		Complete(r)
 }
 

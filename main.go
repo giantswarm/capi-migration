@@ -18,18 +18,26 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	providerv1alpha1 "github.com/giantswarm/apiextensions/v3/pkg/apis/provider/v1alpha1"
+	releasev1alpha1 "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
 	"github.com/giantswarm/certs/v3/pkg/certs"
 	"github.com/giantswarm/k8sclient/v4/pkg/k8sclient"
 	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
+	flag "github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	capzv1alpha3 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
+	expcapzv1alpha3 "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
+	bootstrapkubeadmv1alpha3 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
+	controlplanekubeadmv1alpha3 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
+	expcapiv1alpha3 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -50,41 +58,88 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = capiv1alpha3.AddToScheme(scheme)
+	_ = providerv1alpha1.AddToScheme(scheme)
+	_ = capzv1alpha3.AddToScheme(scheme)
+	_ = expcapiv1alpha3.AddToScheme(scheme)
+	_ = expcapzv1alpha3.AddToScheme(scheme)
+	_ = releasev1alpha1.AddToScheme(scheme)
+	_ = bootstrapkubeadmv1alpha3.AddToScheme(scheme)
+	_ = controlplanekubeadmv1alpha3.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
 var flags = struct {
-	EnableLeaderElection bool
-	MetricsAddr          string
-	Provider             string
+	LeaderElect        bool
+	MetricsBindAddress string
+	Provider           string
 }{}
 
-func initFlags() {
-	flag.BoolVar(&flags.EnableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
-	flag.StringVar(&flags.MetricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&flags.Provider, "provider", "", "Provider name for the migration.")
+func initFlags() (errors []error) {
+	var configPaths []string
+	flag.StringArrayVar(&configPaths, "config", []string{}, "List of paths to configuration file in yaml format with flat, kebab-case keys.")
 
+	// Flag/configuration names.
+	const (
+		flagLeaderElect       = "leader-elect"
+		flagMetricsBindAddres = "metrics-bind-address"
+		flagProvider          = "provider"
+	)
+
+	// Flag binding.
+	flag.Bool(flagLeaderElect, false, "Enable leader election for controller manager.")
+	flag.String(flagMetricsBindAddres, ":8080", "The address the metric endpoint binds to.")
+	flag.String(flagProvider, "", "Provider name for the migration.")
+
+	// Parse flags and configuration.
 	flag.Parse()
-
-	var errors []string
-
-	// Flag validation goes here.
-	//
-	//if flags.MyFlag == "" {
-	//	errors = append(errors, "--my-flag must be not empty")
-	//}
-	if flags.Provider == "" {
-		errors = append(errors, "--provider must be not empty")
+	if err := initViper(configPaths); err != nil {
+		errors = append(errors, fmt.Errorf("failed to read configuration with error: %s", err))
+		return
 	}
 
-	if len(errors) > 1 {
-		fmt.Fprintf(os.Stderr, "%s\n", strings.Join(errors, "\n"))
-		os.Exit(2)
+	// Value binding.
+	flags.LeaderElect = viper.GetBool(flagLeaderElect)
+	flags.MetricsBindAddress = viper.GetString(flagMetricsBindAddres)
+	flags.Provider = viper.GetString(flagProvider)
+
+	// Validation.
+
+	if flags.Provider != "aws" && flags.Provider != "azure" {
+		errors = append(errors, fmt.Errorf("--%s must be either \"aws\" or \"azure\"", flagProvider))
 	}
+
+	return
+}
+
+func initViper(configPaths []string) (errors []error) {
+	viper.BindPFlags(flag.CommandLine)
+
+	if len(configPaths) == 0 {
+		return nil
+	}
+	for _, p := range configPaths {
+		viper.AddConfigPath(p)
+	}
+	err := viper.ReadInConfig()
+	if err != nil {
+		errors = append(errors, err)
+		return
+	}
+
+	return
 }
 
 func main() {
-	initFlags()
+	errs := initFlags()
+	if len(errs) > 0 {
+		ss := make([]string, len(errs))
+		for i := range errs {
+			ss[i] = errs[i].Error()
+		}
+		fmt.Fprintf(os.Stderr, "Error: %s\n", strings.Join(ss, "\n Error:"))
+		os.Exit(2)
+	}
+
 	err := mainE(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", microerror.Pretty(err, true))
@@ -102,9 +157,9 @@ func mainE(ctx context.Context) error {
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
-		MetricsBindAddress: flags.MetricsAddr,
+		MetricsBindAddress: flags.MetricsBindAddress,
 		Port:               9443,
-		LeaderElection:     flags.EnableLeaderElection,
+		LeaderElection:     flags.LeaderElect,
 		LeaderElectionID:   "2db8ae24.giantswarm.io",
 	})
 	if err != nil {
@@ -148,7 +203,8 @@ func mainE(ctx context.Context) error {
 
 	var migratorFactory migration.MigratorFactory
 	{
-		if flags.Provider == "aws" {
+		switch flags.Provider {
+		case "aws":
 			migratorFactory, err = migration.NewAWSMigratorFactory(migration.AWSMigrationConfig{
 				CtrlClient:    mgr.GetClient(),
 				Logger:        log,
@@ -158,7 +214,7 @@ func mainE(ctx context.Context) error {
 			if err != nil {
 				return microerror.Mask(err)
 			}
-		} else if flags.Provider == "azure" {
+		case "azure":
 			migratorFactory, err = migration.NewAzureMigratorFactory(migration.AzureMigrationConfig{
 				CtrlClient:    mgr.GetClient(),
 				Logger:        log,
@@ -167,8 +223,8 @@ func mainE(ctx context.Context) error {
 			if err != nil {
 				return microerror.Mask(err)
 			}
-		} else {
-			return microerror.Maskf(&microerror.Error{Kind: "invalid provider"}, "provider '%s' is unknown or it is not implemented", flags.Provider)
+		default:
+			return microerror.Mask(fmt.Errorf("unknown provider %#q", flags.Provider))
 		}
 
 	}
