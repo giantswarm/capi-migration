@@ -83,12 +83,22 @@ func (m *awsMigrator) createCASecrets(ctx context.Context) error {
 	return nil
 }
 
-// getCAData reads valut PKI endpoint and fetches CA private key and CA certificate
+// getCAData reads vault PKI endpoint and fetches CA private key and CA certificate
 func (m *awsMigrator) getCAData(ctx context.Context) ([]byte, []byte, error) {
-	// Will be implemented once vault client is avaiable
+	secret, err := m.vaultClient.Logical().Read(key.VaultPKIHackyEndpoint(m.clusterID))
+	if err != nil {
+		return nil, nil, microerror.Mask(err)
+	}
 
-	keyData := []byte("TODO")
-	certData := []byte("TODO")
+	keyData, ok := secret.Data["private_key"].([]byte)
+	if !ok {
+		return nil, nil, microerror.Maskf(&microerror.Error{Kind: ""}, "failed to convert vault private key data into []byte")
+	}
+
+	certData, ok2 := secret.Data["certificate"].([]byte)
+	if !ok2 {
+		return nil, nil, microerror.Maskf(&microerror.Error{Kind: ""}, "failed to convert vault certificate data into []byte")
+	}
 
 	return keyData, certData, nil
 }
