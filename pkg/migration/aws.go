@@ -3,7 +3,6 @@ package migration
 import (
 	"context"
 	"fmt"
-
 	giantswarmawsalpha3 "github.com/giantswarm/apiextensions/v3/pkg/apis/infrastructure/v1alpha2"
 	release "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
 	"github.com/giantswarm/apiextensions/v3/pkg/label"
@@ -95,6 +94,11 @@ func (m *awsMigrator) IsMigrating(ctx context.Context) (bool, error) {
 
 func (m *awsMigrator) Prepare(ctx context.Context) error {
 	var err error
+
+	err = m.migrateCertsSecrets(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
 
 	err = m.readCRs(ctx)
 	if err != nil {
@@ -197,7 +201,7 @@ func (m *awsMigrator) prepareMissingCRs(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	err = m.createProxyConfigSecret(ctx)
+	err = m.createCustomFilesSecret(ctx)
 	if err != nil {
 		return microerror.Mask(err)
 	}

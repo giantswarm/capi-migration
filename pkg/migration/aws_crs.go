@@ -1,9 +1,13 @@
 package migration
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"github.com/giantswarm/capi-migration/pkg/migration/internal/key"
+	"github.com/giantswarm/capi-migration/pkg/migration/templates"
 	"strings"
+	"text/template"
 
 	giantswarmawsalpha3 "github.com/giantswarm/apiextensions/v3/pkg/apis/infrastructure/v1alpha2"
 	release "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
@@ -15,10 +19,18 @@ import (
 	capa "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	capaexp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 	capi "sigs.k8s.io/cluster-api/api/v1alpha3"
+	bootstrap "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
 	cabpkv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
+	bootstraptypes "sigs.k8s.io/cluster-api/bootstrap/kubeadm/types/v1beta1"
 	kubeadm "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
 	capiexp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	joinEtcdClusterScriptKey = "join-etcd-cluster"
+	encryptionKeyKey         = "encryption"
+	kubeProxyConfigKey       = "kubeproxy-config"
 )
 
 func (m *awsMigrator) createEncryptionConfigSecret(ctx context.Context) error {
@@ -58,26 +70,30 @@ resources:
 	return nil
 }
 
-func (m *awsMigrator) createProxyConfigSecret(ctx context.Context) error {
-	proxyConfig := `
-apiVersion: kubeproxy.config.k8s.io/v1alpha1
-clientConnection:
-  kubeconfig: /etc/kubernetes/config/proxy-kubeconfig.yaml
-kind: KubeProxyConfiguration
-mode: iptables
-metricsBindAddress: 0.0.0.0:10249`
+func (m *awsMigrator) createCustomFilesSecret(ctx context.Context) error {
+	namespace := "default"
+	params := templates.CustomFilesParams{
+		APIEndpoint:  key.AWSAPIEndpointFromDomain(m.crs.awsCluster.Spec.Cluster.DNS.Domain, m.clusterID),
+		ETCDEndpoint: key.AWSEtcdEndpointFromDomain(m.crs.awsCluster.Spec.Cluster.DNS.Domain, m.clusterID),
+	}
+
+	joinEtcdClusterContent, err := renderTemplate(templates.AWSJoinCluster, params)
+	if err != nil {
+		return microerror.Mask(err)
+	}
 
 	s := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-proxy-config", m.clusterID),
-			Namespace: "default",
+			Name:      key.AWSCustomFilesSecretName(m.clusterID),
+			Namespace: namespace,
 		},
 		Type: corev1.SecretTypeOpaque,
 		StringData: map[string]string{
-			"proxy": proxyConfig,
+			joinEtcdClusterScriptKey: joinEtcdClusterContent,
+			kubeProxyConfigKey:       templates.KubeProxyConfig,
 		},
 	}
-	err := m.mcCtrlClient.Create(ctx, s)
+	err = m.mcCtrlClient.Create(ctx, s)
 	if apierrors.IsAlreadyExists(err) {
 		// It's fine. No worries.
 	} else if err != nil {
@@ -88,9 +104,208 @@ metricsBindAddress: 0.0.0.0:10249`
 }
 
 func (m *awsMigrator) createKubeadmControlPlane(ctx context.Context) error {
-	// TODO
+	replicas := int32(1)
+	namespace := "default"
+	releaseComponents := getReleaseComponents(m.crs.release)
 
-	kcp := &kubeadm.KubeadmControlPlane{}
+	kcp := &kubeadm.KubeadmControlPlane{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      key.AWSKubeadmControlPlaneName(m.clusterID),
+			Namespace: namespace,
+		},
+		Spec: kubeadm.KubeadmControlPlaneSpec{
+			InfrastructureTemplate: corev1.ObjectReference{
+				APIVersion: capa.GroupVersion.String(),
+				Name:       key.AWSMachineTemplateNameForCP(m.clusterID),
+				Kind:       "AWSMachineTemplate",
+			},
+			KubeadmConfigSpec: bootstrap.KubeadmConfigSpec{
+				ClusterConfiguration: &bootstraptypes.ClusterConfiguration{
+					APIServer: bootstraptypes.APIServer{
+						ControlPlaneComponent: bootstraptypes.ControlPlaneComponent{
+							ExtraArgs: map[string]string{
+								"cloud-provider":             "aws",
+								"etcd-prefix":                "giantswarm.io",
+								"encryption-provider-config": "/etc/kubernetes/encryption/k8s-encryption-config.yaml",
+							},
+							ExtraVolumes: []bootstraptypes.HostPathMount{
+								{
+									Name:      "encryption",
+									HostPath:  "/etc/kubernetes/encryption/",
+									MountPath: "/etc/kubernetes/encryption/",
+								},
+							},
+						},
+						CertSANs: []string{
+							key.AWSAPIEndpointFromDomain(m.crs.awsCluster.Spec.Cluster.DNS.Domain, m.clusterID),
+						},
+					},
+					ControllerManager: bootstraptypes.ControlPlaneComponent{
+						ExtraArgs: map[string]string{
+							"cloud-provider": "aws",
+						},
+					},
+					Etcd: bootstraptypes.Etcd{
+						Local: &bootstraptypes.LocalEtcd{
+							DataDir: "/var/lib/etcd/data",
+							ExtraArgs: map[string]string{
+								"initial-cluster-state":                          "existing",
+								"initial-cluster":                                "$ETCD_INITIAL_CLUSTER",
+								"experimental-peer-skip-client-san-verification": "true",
+							},
+						},
+					},
+				},
+				InitConfiguration: &bootstraptypes.InitConfiguration{
+					NodeRegistration: bootstraptypes.NodeRegistrationOptions{
+						KubeletExtraArgs: map[string]string{
+							"cloud-provider": "aws",
+						},
+						Name: "{{ ds.meta_data.local_hostname }}",
+					},
+					LocalAPIEndpoint: bootstraptypes.APIEndpoint{
+						BindPort: 443,
+					},
+				},
+				JoinConfiguration: &bootstraptypes.JoinConfiguration{
+					NodeRegistration: bootstraptypes.NodeRegistrationOptions{
+						KubeletExtraArgs: map[string]string{
+							"cloud-provider": "aws",
+						},
+						Name: "{{ ds.meta_data.local_hostname }}",
+					},
+				},
+				Files: []bootstrap.File{
+					{
+						Path:  "/migration/join-existing-cluster.sh",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.AWSCustomFilesSecretName(m.clusterID),
+								Key:  joinEtcdClusterScriptKey,
+							},
+						},
+					},
+					{
+						Path:  "/etc/kubernetes/encryption/k8s-encryption-config.yaml",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.EncryptionConfigSecretName(m.clusterID),
+								Key:  encryptionKeyKey,
+							},
+						},
+					},
+					{
+						Path:  "/etc/kubernetes/config/proxy-config.yml",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.AWSCustomFilesSecretName(m.clusterID),
+								Key:  kubeProxyConfigKey,
+							},
+						},
+					},
+					{
+						Path:  "/etc/kubernetes/pki/ca.crt",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.CACertsSecretName(m.clusterID),
+								Key:  "tls.crt",
+							},
+						},
+					},
+					{
+						Path:  "/etc/kubernetes/pki/ca.key",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.CACertsSecretName(m.clusterID),
+								Key:  "tls.key",
+							},
+						},
+					},
+					{
+						Path:  "/etc/kubernetes/pki/etcd/ca.key",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.CACertsSecretName(m.clusterID),
+								Key:  "tls.key",
+							},
+						},
+					},
+					{
+						Path:  "/etc/kubernetes/pki/etcd/ca.crt",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.CACertsSecretName(m.clusterID),
+								Key:  "tls.crt",
+							},
+						},
+					},
+					{
+						Path:  "/etc/kubernetes/pki/sa.pub",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.SACertsSecretName(m.clusterID),
+								Key:  "tls.crt",
+							},
+						},
+					},
+					{
+						Path:  "/etc/kubernetes/pki/sa.key",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.SACertsSecretName(m.clusterID),
+								Key:  "tls.key",
+							},
+						},
+					},
+					{
+						Path:  "/etc/kubernetes/pki/etcd/old.key",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.EtcdCertsSecretName(m.clusterID),
+								Key:  "key",
+							},
+						},
+					},
+					{
+						Path:  "/etc/kubernetes/pki/etcd/old.crt",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.EtcdCertsSecretName(m.clusterID),
+								Key:  "crt",
+							},
+						},
+					},
+				},
+				PreKubeadmCommands: []string{
+					"hostnamectl set-hostname $(curl http://169.254.169.254/latest/meta-data/local-hostname) # set proper hostname - necessary for kubeProxy to detect node name",
+					"iptables -A PREROUTING -t nat  -p tcp --dport 6443 -j REDIRECT --to-port 443 # route traffic from 6443 to 443",
+					"/bin/sh /migration/join-existing-cluster.sh",
+				},
+				Users: []bootstrap.User{
+					{
+						Name: "calvix",
+						SSHAuthorizedKeys: []string{
+							"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC9IyAZvlEL7lrxDghpqWjs/z/q4E0OtEbmKW9oD0zhYfyHIaX33YYoj3iC7oEd6OEvY4+L4awjRZ2FrXerN/tTg9t1zrW7f7Tah/SnS9XYY9zyo4uzuq1Pa6spOkjpcjtXbQwdQSATD0eeLraBWWVBDIg1COAMsAhveP04UaXAKGSQst6df007dIS5pmcATASNNBc9zzBmJgFwPDLwVviYqoqcYTASka4fSQhQ+fSj9zO1pgrCvvsmA/QeHz2Cn5uFzjh8ftqkM10sjiYibknsBuvVKZ2KpeTY6XoTOT0d9YWoJpfqAEE00+RmYLqDTQGWm5pRuZSc9vbnnH2MiEKf calvix@xxxx",
+						},
+					},
+				},
+			},
+			Replicas: &replicas,
+			Version:  releaseComponents["K8sVersion"],
+		},
+	}
+
 	err := m.mcCtrlClient.Create(ctx, kcp)
 	if apierrors.IsAlreadyExists(err) {
 		// It's ok. It's already there.
@@ -164,7 +379,7 @@ func (m *awsMigrator) createWorkersMachinePools(ctx context.Context) error {
 
 func (m *awsMigrator) readEncryptionSecret(ctx context.Context) error {
 	obj := &corev1.Secret{}
-	key := ctrl.ObjectKey{Namespace: "default", Name: fmt.Sprintf("%s-encryption", m.clusterID)}
+	key := ctrl.ObjectKey{Namespace: "default", Name: key.EncryptionConfigSecretName(m.clusterID)}
 	err := m.mcCtrlClient.Get(ctx, key, obj)
 	if err != nil {
 		return microerror.Mask(err)
@@ -300,4 +515,15 @@ func (m *awsMigrator) updateAWSCluster(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func renderTemplate(tmpl string, params interface{}) (string, error) {
+	var buff bytes.Buffer
+	t := template.Must(template.New("tmpl").Parse(tmpl))
+
+	err := t.Execute(&buff, params)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+	return buff.String(), nil
 }
