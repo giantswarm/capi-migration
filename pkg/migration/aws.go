@@ -194,6 +194,16 @@ func (m *awsMigrator) readCRs(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
+	err = m.readAWSControlPlane(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = m.readG8sControlPlane(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
 	err = m.readMachinePools(ctx)
 	if err != nil {
 		return microerror.Mask(err)
