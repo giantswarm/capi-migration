@@ -3,9 +3,10 @@ package migration
 import (
 	"context"
 	"fmt"
-
 	"strings"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	giantswarmawsalpha3 "github.com/giantswarm/apiextensions/v3/pkg/apis/infrastructure/v1alpha2"
 	release "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
 	"github.com/giantswarm/apiextensions/v3/pkg/label"
@@ -105,13 +106,12 @@ func (m *awsMigrator) createCustomFilesSecret(ctx context.Context) error {
 
 func (m *awsMigrator) createKubeadmControlPlane(ctx context.Context) error {
 	replicas := int32(1)
-	namespace := "default"
 	releaseComponents := getReleaseComponents(m.crs.release)
 
 	kcp := &kubeadm.KubeadmControlPlane{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      key.AWSKubeadmControlPlaneName(m.clusterID),
-			Namespace: namespace,
+			Namespace: m.crs.g8sControlPlane.Namespace,
 		},
 		Spec: kubeadm.KubeadmControlPlaneSpec{
 			InfrastructureTemplate: corev1.ObjectReference{
@@ -320,10 +320,48 @@ func (m *awsMigrator) createKubeadmControlPlane(ctx context.Context) error {
 }
 
 func (m *awsMigrator) createMasterAWSMachineTemplate(ctx context.Context) error {
-	// TODO
+	var masterSecurityGroupID *string
+	{
+		i := &ec2.DescribeSecurityGroupsInput{
+			Filters: []*ec2.Filter{
+				{
+					Name:   aws.String("tag:Name"),
+					Values: aws.StringSlice([]string{fmt.Sprintf("%s-master", m.clusterID)}),
+				},
+			},
+		}
+		o, err := m.awsClients.ec2Client.DescribeSecurityGroups(i)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+		if len(o.SecurityGroups) != 1 {
+			return microerror.Maskf(nil, "expected 1 master security group but found %d", len(o.SecurityGroups))
+		}
+		masterSecurityGroupID = o.SecurityGroups[0].GroupId
+	}
 
-	amt := &capa.AWSMachineTemplate{}
-	err := m.mcCtrlClient.Create(ctx, amt)
+	machineTemplate := &capa.AWSMachineTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      key.AWSMachineTemplateNameForCP(m.clusterID),
+			Namespace: m.crs.awsControlPlane.Namespace,
+		},
+		Spec: capa.AWSMachineTemplateSpec{
+			Template: capa.AWSMachineTemplateResource{
+				Spec: capa.AWSMachineSpec{
+					IAMInstanceProfile: "control-plane.cluster-api-provider-aws.sigs.k8s.io",
+					InstanceType:       m.crs.awsControlPlane.Spec.InstanceType,
+					SSHKeyName:         aws.String("vaclav"),
+					AdditionalSecurityGroups: []capa.AWSResourceReference{
+						{
+							ID: masterSecurityGroupID,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := m.mcCtrlClient.Create(ctx, machineTemplate)
 	if apierrors.IsAlreadyExists(err) {
 		// It's ok. It's already there.
 	} else if err != nil {
@@ -430,6 +468,50 @@ func (m *awsMigrator) readAWSCluster(ctx context.Context) error {
 
 	obj := objList.Items[0]
 	m.crs.awsCluster = &obj
+
+	return nil
+}
+
+func (m *awsMigrator) readAWSControlPlane(ctx context.Context) error {
+	objList := &giantswarmawsalpha3.AWSControlPlaneList{}
+	selector := ctrl.MatchingLabels{capi.ClusterLabelName: m.clusterID}
+	err := m.mcCtrlClient.List(ctx, objList, selector)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	if len(objList.Items) == 0 {
+		return microerror.Mask(fmt.Errorf("AWSCluster not found for %q", m.clusterID))
+	}
+
+	if len(objList.Items) > 1 {
+		return microerror.Mask(fmt.Errorf("more than one AWSCluster for cluster ID %q", m.clusterID))
+	}
+
+	obj := objList.Items[0]
+	m.crs.awsControlPlane = &obj
+
+	return nil
+}
+
+func (m *awsMigrator) readG8sControlPlane(ctx context.Context) error {
+	objList := &giantswarmawsalpha3.G8sControlPlaneList{}
+	selector := ctrl.MatchingLabels{capi.ClusterLabelName: m.clusterID}
+	err := m.mcCtrlClient.List(ctx, objList, selector)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	if len(objList.Items) == 0 {
+		return microerror.Mask(fmt.Errorf("AWSCluster not found for %q", m.clusterID))
+	}
+
+	if len(objList.Items) > 1 {
+		return microerror.Mask(fmt.Errorf("more than one AWSCluster for cluster ID %q", m.clusterID))
+	}
+
+	obj := objList.Items[0]
+	m.crs.g8sControlPlane = &obj
 
 	return nil
 }
