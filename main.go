@@ -90,8 +90,8 @@ func initFlags() (errors []error) {
 		flagLeaderElect        = "leader-elect"
 		flagMetricsBindAddres  = "metrics-bind-address"
 		flagProvider           = "provider"
-		flagVaultAddr         = "vault-addr"
-		flagVaultToken        = "vault-token"
+		flagVaultAddr          = "vault-addr"
+		flagVaultToken         = "vault-token"
 	)
 
 	// Flag binding.
@@ -131,6 +131,7 @@ func initFlags() (errors []error) {
 	}
 	if flags.VaultToken == "" {
 		errors = append(errors, fmt.Errorf("--%s flag or VAULT_TOKEN environment variable must be set", flagVaultToken))
+	}
 	if flags.Provider == "aws" && (flags.AWSAccessKeyID == "" || flags.AWSAccessKeySecret == "") {
 		errors = append(errors, fmt.Errorf("when \"aws\" provider is set, --%s and --%s must not be empty", flagAWSAccessKeyID, flagAWSAccessKeySecret))
 	}
