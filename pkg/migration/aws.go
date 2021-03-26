@@ -111,6 +111,11 @@ func (m *awsMigrator) Prepare(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
+	err = m.createAWSApiClients(ctx)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
 	err = m.prepareMissingCRs(ctx)
 	if err != nil {
 		return microerror.Mask(err)
