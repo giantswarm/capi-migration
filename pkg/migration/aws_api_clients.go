@@ -17,10 +17,10 @@ import (
 )
 
 type AWSConfig struct {
-	Region          string
 	AccessKeyID     string
 	AccessKeySecret string
 
+	Region  string
 	RoleARN string
 }
 

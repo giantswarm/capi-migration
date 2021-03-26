@@ -23,10 +23,10 @@ import (
 type AWSMigrationConfig struct {
 
 	// Migration configuration + dependencies such as k8s client.
+	AWSCredentials AWSConfig
 	CtrlClient     ctrl.Client
 	Logger         micrologger.Logger
 	TenantCluster  tenantcluster.Interface
-	AWSCredentials AWSConfig
 }
 
 type awsMigratorFactory struct {
