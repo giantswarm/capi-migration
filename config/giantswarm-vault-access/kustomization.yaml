@@ -1,0 +1,28 @@
+bases:
+- ../giantswarm-psp
+
+resources:
+- secret.yaml
+
+images:
+- name: ensure-vault-token
+  newName: giantswarm/k8s-jwt-to-vault-token
+  newTag: 0.1.0
+
+patchesStrategicMerge:
+- manager_init_container_patch.yaml
+
+vars:
+- fieldref:
+    fieldPath: metadata.namespace
+  name: NAMESPACE
+  objref:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: controller-manager
+- fieldref: {}
+  name: VAULT_TOKEN_SECRET_NAME
+  objref:
+    apiVersion: v1
+    kind: Secret
+    name: controller-manager-vault-token
