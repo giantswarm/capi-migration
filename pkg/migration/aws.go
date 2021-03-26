@@ -227,7 +227,7 @@ func (m *awsMigrator) prepareMissingCRs(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	err = m.createWorkersAWSMachineTemplate(ctx)
+	err = m.createWorkersAWSMachinePools(ctx)
 	if err != nil {
 		return microerror.Mask(err)
 	}

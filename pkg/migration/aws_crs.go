@@ -3,6 +3,8 @@ package migration
 import (
 	"context"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/ec2"
 
 	"strings"
 
@@ -348,10 +350,72 @@ func (m *awsMigrator) createWorkersKubeadmConfigTemplate(ctx context.Context) er
 	return nil
 }
 
-func (m *awsMigrator) createWorkersAWSMachineTemplate(ctx context.Context) error {
-	// TODO
+func (m *awsMigrator) createWorkersAWSMachinePools(ctx context.Context) error {
+	i := &ec2.DescribeSecurityGroupsInput{
+		Filters: []*ec2.Filter{
+			{
+				Name:   aws.String("tag:Name"),
+				Values: aws.StringSlice([]string{fmt.Sprintf("%s-worker", m.clusterID)}),
+			},
+			{
+				Name:   aws.String("tag:giantswarm.io/machine-deployment"),
+				Values: aws.StringSlice([]string{d.Name}),
+			},
+		},
+	}
 
-	amt := &capaexp.AWSMachinePool{}
+	o, err := ec2Client.DescribeSecurityGroups(i)
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+	if len(o.SecurityGroups) != 1 {
+		return nil, microerror.Maskf(nil, "expected 1 master security group but found %d", len(o.SecurityGroups))
+	}
+
+	i2 := &ec2.DescribeSubnetsInput{
+		Filters: []*ec2.Filter{
+			{
+				Name:   aws.String("tag:giantswarm.io/machine-deployment"),
+				Values: aws.StringSlice([]string{d.Name}),
+			},
+		},
+	}
+
+	o2, err := ec2Client.DescribeSubnets(i2)
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+
+	awsmp := &capiawsexpv1alpha3.AWSMachinePool{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "AWSMachinePool",
+			APIVersion: capiawsexpv1alpha3.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machinePoolName(clusterID, d.Name),
+			Namespace: d.Namespace,
+		},
+		Spec: capiawsexpv1alpha3.AWSMachinePoolSpec{
+			MinSize: int32(d.Spec.NodePool.Scaling.Min),
+			MaxSize: int32(d.Spec.NodePool.Scaling.Max),
+			AWSLaunchTemplate: capiawsexpv1alpha3.AWSLaunchTemplate{
+				Name:               d.Name,
+				InstanceType:       d.Spec.Provider.Worker.InstanceType,
+				SSHKeyName:         aws.String("vaclav"),
+				IamInstanceProfile: "nodes.cluster-api-provider-aws.sigs.k8s.io",
+				AdditionalSecurityGroups: []capiawsv1alpha3.AWSResourceReference{
+					{
+						ID: o.SecurityGroups[0].GroupId,
+					},
+				},
+			},
+		},
+	}
+
+	for _, subnet := range o2.Subnets {
+		awsmp.Spec.Subnets = append(awsmp.Spec.Subnets, capiawsv1alpha3.AWSResourceReference{ID: subnet.SubnetId})
+		awsmp.Spec.AvailabilityZones = append(awsmp.Spec.AvailabilityZones, *subnet.AvailabilityZone)
+	}
 
 	err := m.mcCtrlClient.Create(ctx, amt)
 	if apierrors.IsAlreadyExists(err) {
