@@ -18,6 +18,10 @@ func AWSMachineTemplateNameForCP(clusterID string) string {
 	return fmt.Sprintf("%s-control-plane", clusterID)
 }
 
+func AWSMachinePoolName(clusterID string, machineID string) string {
+	return fmt.Sprintf("%s-worker-%s", clusterID, machineID)
+}
+
 func AWSAPIEndpointFromDomain(domain string, clusterID string) string {
 	return fmt.Sprintf("api.%s.k8s.%s", clusterID, domain)
 }

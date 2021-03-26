@@ -17,7 +17,6 @@ import (
 	"sigs.k8s.io/cluster-api/api/v1alpha3"
 	capi "sigs.k8s.io/cluster-api/api/v1alpha3"
 	kubeadm "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
-	capiexp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -37,15 +36,13 @@ type awsCRs struct {
 	encryptionSecret *corev1.Secret
 	release          *release.Release
 
-	cluster    *capi.Cluster
-	awsCluster *giantswarmawsalpha3.AWSCluster
-
+	cluster             *capi.Cluster
+	awsCluster          *giantswarmawsalpha3.AWSCluster
 	awsControlPlane     *giantswarmawsalpha3.AWSControlPlane
 	g8sControlPlane     *giantswarmawsalpha3.G8sControlPlane
 	kubeadmControlPlane *kubeadm.KubeadmControlPlane
 
-	machinePools    []capiexp.MachinePool
-	awsMachinePools []giantswarmawsalpha3.AWSMachineDeployment
+	awsMachineDeployments []giantswarmawsalpha3.AWSMachineDeployment
 }
 
 type awsMigrator struct {
@@ -204,11 +201,6 @@ func (m *awsMigrator) readCRs(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	err = m.readMachinePools(ctx)
-	if err != nil {
-		return microerror.Mask(err)
-	}
-
 	err = m.readAWSMachineDeployments(ctx)
 	if err != nil {
 		return microerror.Mask(err)
@@ -239,6 +231,7 @@ func (m *awsMigrator) prepareMissingCRs(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
+	// Create CP
 	err = m.createKubeadmControlPlane(ctx)
 	if err != nil {
 		return microerror.Mask(err)
@@ -249,12 +242,13 @@ func (m *awsMigrator) prepareMissingCRs(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
+	// Create Workers
 	err = m.createWorkersKubeadmConfigTemplate(ctx)
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	err = m.createWorkersAWSMachineTemplate(ctx)
+	err = m.createWorkersAWSMachinePools(ctx)
 	if err != nil {
 		return microerror.Mask(err)
 	}

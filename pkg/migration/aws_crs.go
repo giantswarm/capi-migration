@@ -18,7 +18,6 @@ import (
 	capaexp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 	capi "sigs.k8s.io/cluster-api/api/v1alpha3"
 	bootstrap "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
-	cabpkv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
 	bootstraptypes "sigs.k8s.io/cluster-api/bootstrap/kubeadm/types/v1beta1"
 	kubeadm "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
 	capiexp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
@@ -372,44 +371,190 @@ func (m *awsMigrator) createMasterAWSMachineTemplate(ctx context.Context) error 
 }
 
 func (m *awsMigrator) createWorkersKubeadmConfigTemplate(ctx context.Context) error {
-	// TODO
+	// iterate over all nodepools (AWSMachineDeployments)
+	for _, d := range m.crs.awsMachineDeployments {
 
-	kct := &cabpkv1.KubeadmConfigTemplate{}
+		c := &bootstrap.KubeadmConfig{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      key.AWSMachinePoolName(m.clusterID, d.Name),
+				Namespace: d.Namespace,
+			},
+			Spec: bootstrap.KubeadmConfigSpec{
+				PreKubeadmCommands: []string{
+					"hostnamectl set-hostname $(curl http://169.254.169.254/latest/meta-data/local-hostname)",
+				},
+				InitConfiguration: &bootstraptypes.InitConfiguration{
+					NodeRegistration: bootstraptypes.NodeRegistrationOptions{
+						KubeletExtraArgs: map[string]string{
+							"cloud-provider": "aws",
+						},
+						Name: "{{ ds.meta_data.local_hostname }}",
+					},
+				},
+				JoinConfiguration: &bootstraptypes.JoinConfiguration{
+					NodeRegistration: bootstraptypes.NodeRegistrationOptions{
+						KubeletExtraArgs: map[string]string{
+							"cloud-provider": "aws",
+							"node-labels":    "node.kubernetes.io/worker,role=worker",
+						},
+						Name: "{{ ds.meta_data.local_hostname }}",
+					},
+				},
+				Files: []bootstrap.File{
+					{
+						Path:  "/etc/kubernetes/config/kube-proxy.yaml",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.AWSCustomFilesSecretName(m.clusterID),
+								Key:  "kubeProxyKubeconfigKey",
+							},
+						},
+					},
+					{
+						Path:  "/etc/kubernetes/config/proxy-config.yml",
+						Owner: "root:root",
+						ContentFrom: &bootstrap.FileSource{
+							Secret: bootstrap.SecretFileSource{
+								Name: key.AWSCustomFilesSecretName(m.clusterID),
+								Key:  kubeProxyConfigKey,
+							},
+						},
+					},
+				},
+			},
+		}
 
-	err := m.mcCtrlClient.Create(ctx, kct)
-	if apierrors.IsAlreadyExists(err) {
-		// It's ok. It's already there.
-	} else if err != nil {
-		return microerror.Mask(err)
+		err := m.mcCtrlClient.Create(ctx, c)
+		if apierrors.IsAlreadyExists(err) {
+			// It's ok. It's already there.
+		} else if err != nil {
+			return microerror.Mask(err)
+		}
 	}
 
 	return nil
 }
 
-func (m *awsMigrator) createWorkersAWSMachineTemplate(ctx context.Context) error {
-	// TODO
+func (m *awsMigrator) createWorkersAWSMachinePools(ctx context.Context) error {
+	// iterate over all nodepools (AWSMachineDeployments)
+	for _, d := range m.crs.awsMachineDeployments {
+		// FETCH AWS INFO
+		i := &ec2.DescribeSecurityGroupsInput{
+			Filters: []*ec2.Filter{
+				{
+					Name:   aws.String("tag:Name"),
+					Values: aws.StringSlice([]string{fmt.Sprintf("%s-worker", m.clusterID)}),
+				},
+				{
+					Name:   aws.String("tag:giantswarm.io/machine-deployment"),
+					Values: aws.StringSlice([]string{d.Name}),
+				},
+			},
+		}
 
-	amt := &capaexp.AWSMachinePool{}
+		o, err := m.awsClients.ec2Client.DescribeSecurityGroups(i)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+		if len(o.SecurityGroups) != 1 {
+			return microerror.Maskf(nil, "expected 1 master security group but found %d", len(o.SecurityGroups))
+		}
 
-	err := m.mcCtrlClient.Create(ctx, amt)
-	if apierrors.IsAlreadyExists(err) {
-		// It's ok. It's already there.
-	} else if err != nil {
-		return microerror.Mask(err)
+		i2 := &ec2.DescribeSubnetsInput{
+			Filters: []*ec2.Filter{
+				{
+					Name:   aws.String("tag:giantswarm.io/machine-deployment"),
+					Values: aws.StringSlice([]string{d.Name}),
+				},
+			},
+		}
+
+		o2, err := m.awsClients.ec2Client.DescribeSubnets(i2)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+
+		// Create the CR
+		awsmp := &capaexp.AWSMachinePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      key.AWSMachinePoolName(m.clusterID, d.Name),
+				Namespace: d.Namespace,
+			},
+			Spec: capaexp.AWSMachinePoolSpec{
+				MinSize: int32(d.Spec.NodePool.Scaling.Min),
+				MaxSize: int32(d.Spec.NodePool.Scaling.Max),
+				AWSLaunchTemplate: capaexp.AWSLaunchTemplate{
+					Name:               d.Name,
+					InstanceType:       d.Spec.Provider.Worker.InstanceType,
+					SSHKeyName:         aws.String("vaclav"),
+					IamInstanceProfile: "nodes.cluster-api-provider-aws.sigs.k8s.io",
+					AdditionalSecurityGroups: []capa.AWSResourceReference{
+						{
+							ID: o.SecurityGroups[0].GroupId,
+						},
+					},
+				},
+			},
+		}
+
+		for _, subnet := range o2.Subnets {
+			awsmp.Spec.Subnets = append(awsmp.Spec.Subnets, capa.AWSResourceReference{ID: subnet.SubnetId})
+			awsmp.Spec.AvailabilityZones = append(awsmp.Spec.AvailabilityZones, *subnet.AvailabilityZone)
+		}
+
+		err = m.mcCtrlClient.Create(ctx, awsmp)
+		if apierrors.IsAlreadyExists(err) {
+			// It's ok. It's already there.
+		} else if err != nil {
+			return microerror.Mask(err)
+		}
 	}
 
 	return nil
 }
 
 func (m *awsMigrator) createWorkersMachinePools(ctx context.Context) error {
-	// TODO
-	md := &capi.MachineDeployment{}
+	k8sVersion := getReleaseComponents(m.crs.release)["K8sVersion"]
 
-	err := m.mcCtrlClient.Create(ctx, md)
-	if apierrors.IsAlreadyExists(err) {
-		// It's ok. It's already there.
-	} else if err != nil {
-		return microerror.Mask(err)
+	for _, d := range m.crs.awsMachineDeployments {
+		mp := &capiexp.MachinePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      key.AWSMachinePoolName(m.clusterID, d.Name),
+				Namespace: d.Namespace,
+			},
+			Spec: capiexp.MachinePoolSpec{
+				ClusterName: m.clusterID,
+				Replicas:    aws.Int32(int32(d.Spec.NodePool.Scaling.Min)),
+				Template: capi.MachineTemplateSpec{
+					Spec: capi.MachineSpec{
+						ClusterName: m.clusterID,
+						Version:     &k8sVersion,
+						InfrastructureRef: corev1.ObjectReference{
+							Name:       key.AWSMachinePoolName(m.clusterID, d.Name),
+							Namespace:  d.Namespace,
+							Kind:       "AWSMachinePool",
+							APIVersion: capiexp.GroupVersion.String(),
+						},
+						Bootstrap: capi.Bootstrap{
+							ConfigRef: &corev1.ObjectReference{
+								Name:       key.AWSMachinePoolName(m.clusterID, d.Name),
+								Namespace:  d.Namespace,
+								Kind:       "KubeadmConfig",
+								APIVersion: bootstrap.GroupVersion.String(),
+							},
+						},
+					},
+				},
+			},
+		}
+
+		err := m.mcCtrlClient.Create(ctx, mp)
+		if apierrors.IsAlreadyExists(err) {
+			// It's ok. It's already there.
+		} else if err != nil {
+			return microerror.Mask(err)
+		}
 	}
 
 	return nil
@@ -516,19 +661,6 @@ func (m *awsMigrator) readG8sControlPlane(ctx context.Context) error {
 	return nil
 }
 
-func (m *awsMigrator) readMachinePools(ctx context.Context) error {
-	objList := &capiexp.MachinePoolList{}
-	selector := ctrl.MatchingLabels{capi.ClusterLabelName: m.clusterID}
-	err := m.mcCtrlClient.List(ctx, objList, selector)
-	if err != nil {
-		return microerror.Mask(err)
-	}
-
-	m.crs.machinePools = objList.Items
-
-	return nil
-}
-
 func (m *awsMigrator) readAWSMachineDeployments(ctx context.Context) error {
 	objList := &giantswarmawsalpha3.AWSMachineDeploymentList{}
 	selector := ctrl.MatchingLabels{capi.ClusterLabelName: m.clusterID}
@@ -537,7 +669,7 @@ func (m *awsMigrator) readAWSMachineDeployments(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
-	m.crs.awsMachinePools = objList.Items
+	m.crs.awsMachineDeployments = objList.Items
 
 	return nil
 }
