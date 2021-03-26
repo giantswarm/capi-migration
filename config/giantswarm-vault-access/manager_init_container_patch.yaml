@@ -6,6 +6,15 @@ metadata:
 spec:
   template:
     spec:
-      securityContext:
-        runAsUser: 1000
-        runAsGroup: 1000
+      initContainers:
+      - args:
+        - --vault-address=$(VAULT_ADDR)
+        - --vault-role=$(ENSURE_VAULT_TOKEN_VAULT_ROLE)
+        - --vault-token-secret-name=$(VAULT_TOKEN_SECRET_NAME)
+        - --vault-token-secret-namespace=$(NAMESPACE)
+        image: "ensure-vault-token:latest"
+        imagePullPolicy: Always
+        name: ensure-vault-token
+        envFrom:
+        - configMapRef:
+            name: controller-manager
