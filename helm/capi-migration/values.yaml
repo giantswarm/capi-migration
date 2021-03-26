@@ -4,6 +4,8 @@ provider: ""
 
 # Generic configuration.
 
+registry:
+  domain: docker.io
 image:
   name: "giantswarm/capi-migration"
   tag: "[[ .Version ]]"
