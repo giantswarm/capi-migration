@@ -11,6 +11,7 @@ import (
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
 	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
+	vaultclient "github.com/hashicorp/vault/api"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/cluster-api/api/v1alpha3"
@@ -56,6 +57,7 @@ type awsMigrator struct {
 	logger       micrologger.Logger
 	mcCtrlClient ctrl.Client
 	wcCtrlClient ctrl.Client
+	vaultClient  *vaultclient.Client
 }
 
 func NewAWSMigratorFactory(cfg AWSMigrationConfig) (MigratorFactory, error) {
@@ -78,6 +80,12 @@ func (f *awsMigratorFactory) NewMigrator(cluster *v1alpha3.Cluster) (Migrator, e
 	if err != nil {
 		return nil, microerror.Mask(err)
 	}
+	// TODO set proper address and token
+	config := vaultclient.DefaultConfig()
+	vaultClient, err := vaultclient.NewClient(config)
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
 
 	return &awsMigrator{
 		awsCredentials: f.config.AWSCredentials,
@@ -87,6 +95,7 @@ func (f *awsMigratorFactory) NewMigrator(cluster *v1alpha3.Cluster) (Migrator, e
 		logger:       f.config.Logger,
 		mcCtrlClient: f.config.CtrlClient,
 		wcCtrlClient: k8sClient.CtrlClient(),
+		vaultClient:  vaultClient,
 	}, nil
 }
 
