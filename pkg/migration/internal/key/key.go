@@ -44,3 +44,7 @@ func SACertsSecretName(clusterID string) string {
 func EtcdCertsSecretName(clusterID string) string {
 	return fmt.Sprintf("%s-etcd", clusterID)
 }
+
+func VaultPKIHackyEndpoint(clusterID string) string {
+	return fmt.Sprintf("pki-%s/gimmeallyourlovin", clusterID)
+}
