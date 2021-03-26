@@ -112,7 +112,11 @@ func initFlags() (errors []error) {
 }
 
 func initViper(configPaths []string) (errors []error) {
-	viper.BindPFlags(flag.CommandLine)
+	err := viper.BindPFlags(flag.CommandLine)
+	if err != nil {
+		errors = append(errors, err)
+		return
+	}
 
 	if len(configPaths) == 0 {
 		return nil
@@ -120,7 +124,7 @@ func initViper(configPaths []string) (errors []error) {
 	for _, p := range configPaths {
 		viper.AddConfigPath(p)
 	}
-	err := viper.ReadInConfig()
+	err = viper.ReadInConfig()
 	if err != nil {
 		errors = append(errors, err)
 		return
