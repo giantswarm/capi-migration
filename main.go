@@ -90,8 +90,8 @@ func initFlags() (errors []error) {
 	)
 
 	// Flag binding.
-	flag.String(flagAWSAccessKeyID, "", "aws access key for MC")
-	flag.String(flagAWSAccessKeySecret, "", "aws secret key for MC")
+	flag.String(flagAWSAccessKeyID, "", "AWS access key for MC.")
+	flag.String(flagAWSAccessKeySecret, "", "AWS secret key for MC.")
 	flag.Bool(flagLeaderElect, false, "Enable leader election for controller manager.")
 	flag.String(flagMetricsBindAddres, ":8080", "The address the metric endpoint binds to.")
 	flag.String(flagProvider, "", "Provider name for the migration.")
