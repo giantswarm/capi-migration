@@ -44,8 +44,30 @@ To try things quickly you can run `make run`. That will run `main.go` against
 a current kubectl context (i.e. `kubectl config current-context`).
 
 All flags that can be passed to the `main.go` can be also passed as environment
-variables prefixed with `CAPI_MIGRATION_`. E.g. `--provider=azure` can be
-set using `CAPI_MIGRATION_PROVIDER=azure make run`.
+variables prefixed with `CAPI_MIGRATION_`. E.g. `--metrics-bind-address=:9090`
+can be set using `CAPI_MIGRATION_METRICS_BIND_ADDRESS=:9090 make run`.
+
+To make it work you need to export vault credentials and set the provider you
+wish to run against:
+
+```sh
+export PROVIDER="aws|azure"
+export VAULT_ADDR="https://..."
+export VAULT_TOKEN="..."
+export VAULT_CAPATH="/..."
+
+make run
+```
+
+### Deploying dev version with kustomize
+
+To deploy a development version to a running cluster you can use `make deploy`
+but **it requires some prior preparation**. You need to create
+a `config/dev/manager_patch.yaml` file. There is an example file available in
+`config/dev`. This file must be crafted specifically for the installation. Your
+current `$USER` will be added as a suffix to all generated resources and they
+will be deployed to `giantswarm` namespace. You can change the suffix with
+`NAME_SUFFIX` env var. E.g. `NAME_SUFFIX=$USER make deploy`.
 
 ### Helm chart
 

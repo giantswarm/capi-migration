@@ -1,10 +1,10 @@
-namespace: giantswarm
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
 
 configurations:
 - namereference.yaml
 
 resources:
-- ../default
 - psp.yaml
 - psp_role.yaml
 - psp_role_binding.yaml

@@ -18,22 +18,17 @@ manager: generate fmt vet
 	go build -o bin/manager main.go
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy: CONFIG_VERSION := $(shell $(YQ) e '.annotations."config.giantswarm.io/version"' helm/$(APPLICATION)/Chart.yaml)
+deploy: NAME_SUFFIX ?= $(USER)
 deploy:
-	cd config/dev && kustomize edit set image controller=${IMG}
-	kustomize build config/dev-aws | kubectl apply -f -
-	@echo "Deprecated: use \"make deploy-aws\" or \"make deploy-azure\"" >&2 && exit 1
-
-undeploy:
-	@echo "Deprecated: use \"make undeploy-aws\" or \"make undeploy-azure\"" >&2 && exit 1
+	cd config/dev && kustomize edit set image controller=$(IMG)
+	cd config/dev && kustomize edit set namesuffix -- -$(NAME_SUFFIX)
+	kustomize build config/dev | kubectl apply -f -
 
 # Undeploy controller in the configured Kubernetes cluster in ~/.kube/config
-undeploy-aws: manifests
-	kustomize build config/dev-aws | kubectl delete -f -
-
-# Undeploy controller in the configured Kubernetes cluster in ~/.kube/config
-undeploy-azure: manifests
-	kustomize build config/dev-azure | kubectl delete -f -
+undeploy: NAME_SUFFIX ?= $(USER)
+undeploy: manifests
+	cd config/dev && kustomize edit set namesuffix -- -$(NAME_SUFFIX)
+	kustomize build config/dev | kubectl delete -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: CHART_TEMPLATE_FILE := helm/$(APPLICATION)/templates/kustomize-out.yaml

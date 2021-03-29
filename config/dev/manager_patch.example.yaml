@@ -1,0 +1,34 @@
+#
+# WARNING: This is an example file and should not be used for deployment !!!
+#          Make your own copy named as manager_patch.yaml. It is ignored in
+#          .gitignore.
+#
+# Things to note:
+#
+#   - VAULT_ROLE should stay the same. We have it configured with the same name
+#     on all installations.
+#   - VAULT_ADDR is specified twice. It must be set to the same URL.
+#   - Some values are defined as flags (e.g. --provider).
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: ensure-vault-token
+        env:
+        - name: VAULT_ADDR
+          value: 'https://vault.gremlin.germanywestcentral.azure.gigantic.io:443'
+        - name: VAULT_ROLE
+          value: "capi-migration"
+      containers:
+      - name: manager
+        args:
+        - --provider=azure
+        env:
+        - name: VAULT_ADDR
+          value: 'https://vault.gremlin.germanywestcentral.azure.gigantic.io:443'

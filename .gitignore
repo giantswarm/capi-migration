@@ -1,3 +1,4 @@
+config/dev/manager_patch.yaml
 
 # Binaries for programs and plugins
 *.exe
