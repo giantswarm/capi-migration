@@ -48,7 +48,7 @@ To make it work you need to export vault credentials:
 ```sh
 export VAULT_ADDR="https://..."
 export VAULT_TOKEN="..."
-export export VAULT_CAPATH="/..."
+export VAULT_CAPATH="/..."
 
 make run
 ```
