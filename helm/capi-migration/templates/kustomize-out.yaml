@@ -144,6 +144,18 @@ metadata:
   name: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-manager-role'
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - cluster.x-k8s.io
   resources:
   - clusters
