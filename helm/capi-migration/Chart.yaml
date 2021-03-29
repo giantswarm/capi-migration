@@ -3,4 +3,6 @@ name: capi-migration
 description: capi-migration chart.
 home: https://github.com/giantswarm/capi-migration
 version: [[ .Version ]]
-appVersion: [[ .AppVersion ]]
+appVersion: '[[ .AppVersion ]]'
+annotations:
+  config.giantswarm.io/version: add-capi-migration

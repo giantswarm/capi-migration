@@ -1,0 +1,4 @@
+apiVersion: giantswarm.io/v1
+kind: Config
+metadata:
+  name: not-important

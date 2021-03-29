@@ -11,22 +11,18 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+YQ := docker run --rm -v "${PWD}":/workdir mikefarah/yq
+
 # Build manager binary
 manager: generate fmt vet
 	go build -o bin/manager main.go
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
+deploy: CONFIG_VERSION := $(shell $(YQ) e '.annotations."config.giantswarm.io/version"' helm/$(APPLICATION)/Chart.yaml)
 deploy:
-	@echo "Deprecated: use \"make deploy-aws\" or \"make deploy-azure\"" >&2 && exit 1
-
-# Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy-aws: manifests
 	cd config/dev && kustomize edit set image controller=${IMG}
 	kustomize build config/dev-aws | kubectl apply -f -
-
-deploy-azure: manifests
-	cd config/dev && kustomize edit set image controller=${IMG}
-	kustomize build config/dev-azure | kubectl apply -f -
+	@echo "Deprecated: use \"make deploy-aws\" or \"make deploy-azure\"" >&2 && exit 1
 
 undeploy:
 	@echo "Deprecated: use \"make undeploy-aws\" or \"make undeploy-azure\"" >&2 && exit 1
@@ -40,8 +36,9 @@ undeploy-azure: manifests
 	kustomize build config/dev-azure | kubectl delete -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: CHART_TEMPLATE_FILE := $(shell ls -d helm/$$(basename $$(go list -m)))/templates/kustomize-out.yaml
+manifests: CHART_TEMPLATE_FILE := helm/$(APPLICATION)/templates/kustomize-out.yaml
 manifests: controller-gen
+	exit 7
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	mkdir -p $(shell dirname $(CHART_TEMPLATE_FILE))
 	kustomize build config/helm -o '$(CHART_TEMPLATE_FILE)'

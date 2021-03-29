@@ -10,5 +10,8 @@ images:
   newTag: latest
 
 resources:
-- ../giantswarm
 - namespace.yaml
+- ../giantswarm
+
+generators:
+- config_generator.yaml

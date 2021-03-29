@@ -1,0 +1,29 @@
+#!/bin/bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+if ! command -v config-controller >/dev/null ; then
+    echo >&2 'ERROR: config-controller not installed'
+    exit 1
+fi
+
+if [[ -z "${INSTALLATION:-""}" ]] ; then
+    echo >&2 'Error: $INSTALLATION environment variable must be set'
+    exit 1
+fi
+
+if [[ -z "${CONFIG_VERSION:-""}" ]] ; then
+    echo >&2 'Error: $CONFIG_VERSION environment variable must be set'
+    exit 1
+fi
+
+app="$(basename $(go list -m))"
+
+config-controller generate \
+    --app ${app} \
+    --config-version ${CONFIG_VERSION} \
+    --installation ${INSTALLATION} \
+    --namespace system \
+    --name config
