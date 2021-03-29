@@ -1,11 +1,24 @@
-namespace: capi-migration-system-dev
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: giantswarm
+namePrefix: capi-migration-dev-
+nameSuffix: -kopiczko
 
 images:
 - name: controller
   newName: giantswarm/capi-migration
   newTag: latest
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
 resources:
-- ../giantswarm
+- ../default
+
+components:
+- ../components/psp
+- ../components/vault-access
+
+# NOTE: manager_patch.yaml is intentionally ignored in .gitignore !!!
+#
+# Check the manager_patch.example.yaml for inspiration.
+patchesStrategicMerge:
+- manager_patch.yaml

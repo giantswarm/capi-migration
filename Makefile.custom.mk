@@ -27,28 +27,17 @@ run-azure: generate fmt vet manifests
 	go run ./main.go --provider=azure
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
+deploy: NAME_SUFFIX ?= $(USER)
 deploy:
-	@echo "Deprecated: use \"make deploy-aws\" or \"make deploy-azure\"" >&2 && exit 1
-
-# Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy-aws: manifests
-	cd config/dev && kustomize edit set image controller=${IMG}
-	kustomize build config/dev-aws | kubectl apply -f -
-
-deploy-azure: manifests
-	cd config/dev && kustomize edit set image controller=${IMG}
-	kustomize build config/dev-azure | kubectl apply -f -
-
-undeploy:
-	@echo "Deprecated: use \"make undeploy-aws\" or \"make undeploy-azure\"" >&2 && exit 1
+	cd config/dev && kustomize edit set image controller=$(IMG)
+	cd config/dev && kustomize edit set namesuffix -- -$(NAME_SUFFIX)
+	kustomize build config/dev | kubectl apply -f -
 
 # Undeploy controller in the configured Kubernetes cluster in ~/.kube/config
-undeploy-aws: manifests
-	kustomize build config/dev-aws | kubectl delete -f -
-
-# Undeploy controller in the configured Kubernetes cluster in ~/.kube/config
-undeploy-azure: manifests
-	kustomize build config/dev-azure | kubectl delete -f -
+undeploy: NAME_SUFFIX ?= $(USER)
+undeploy: manifests
+	cd config/dev && kustomize edit set namesuffix -- -$(NAME_SUFFIX)
+	kustomize build config/dev | kubectl delete -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: CHART_TEMPLATE_FILE := $(shell ls -d helm/$$(basename $$(go list -m)))/templates/kustomize-out.yaml

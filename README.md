@@ -53,6 +53,16 @@ export export VAULT_CAPATH="/..."
 make run
 ```
 
+### Deploying dev version with kustomize
+
+To deploy a development version to a running cluster you can use `make deploy`
+but **it requires some prior preparation**. You need to create
+a `config/dev/manager_patch.yaml` file. There is an example file available in
+`config/dev`. This file must be crafted specifically for the installation. Your
+current `$USER` will be added as a suffix to all generated resources and they
+will be deployed to `giantswarm` namespace. You can change the suffix with
+`NAME_SUFFIX` env var. E.g. `NAME_SUFFIX=$USER make deploy`.
+
 ### Helm chart
 
 The helm chart templates are generated using kustomize overlay stored in
