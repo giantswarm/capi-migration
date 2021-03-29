@@ -3,7 +3,7 @@ kind: Kustomization
 
 namespace: giantswarm
 namePrefix: capi-migration-dev-
-nameSuffix: -kopiczko
+nameSuffix: -changed-by-make-deploy
 
 images:
 - name: controller
