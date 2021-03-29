@@ -27,7 +27,10 @@ import (
 	releasev1alpha1 "github.com/giantswarm/apiextensions/v3/pkg/apis/release/v1alpha1"
 	"github.com/giantswarm/certs/v3/pkg/certs"
 	"github.com/giantswarm/k8sclient/v4/pkg/k8sclient"
+	"github.com/giantswarm/microerror"
+	"github.com/giantswarm/micrologger"
 	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
+	vaultapi "github.com/hashicorp/vault/api"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,13 +44,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/giantswarm/capi-migration/controllers"
-	"github.com/giantswarm/capi-migration/pkg/migration"
-
-	"github.com/giantswarm/microerror"
-	"github.com/giantswarm/micrologger"
 	capiv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	// +kubebuilder:scaffold:imports
+
+	"github.com/giantswarm/capi-migration/controllers"
+	"github.com/giantswarm/capi-migration/pkg/migration"
 )
 
 const (
@@ -79,6 +80,8 @@ var flags = struct {
 	LeaderElect        bool
 	MetricsBindAddress string
 	Provider           string
+	VaultAddr          string
+	VaultToken         string
 }{}
 
 func initFlags() (errors []error) {
@@ -92,6 +95,8 @@ func initFlags() (errors []error) {
 		flagLeaderElect        = "leader-elect"
 		flagMetricsBindAddres  = "metrics-bind-address"
 		flagProvider           = "provider"
+		flagVaultAddr          = "vault-addr"
+		flagVaultToken         = "vault-token"
 	)
 
 	// Flag binding.
@@ -100,6 +105,10 @@ func initFlags() (errors []error) {
 	flag.Bool(flagLeaderElect, false, "Enable leader election for controller manager.")
 	flag.String(flagMetricsBindAddres, ":8080", "The address the metric endpoint binds to.")
 	flag.String(flagProvider, "", "Provider name for the migration.")
+	flag.String(flagVaultAddr, "", "The address of the vault to connect to. Defaults to VAULT_ADDR.")
+	must(microerror.Mask(viper.BindEnv(flagVaultAddr, "VAULT_ADDR")))
+	flag.String(flagVaultToken, "", "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
+	must(microerror.Mask(viper.BindEnv(flagVaultAddr, "VAULT_TOKEN")))
 
 	// Parse flags and configuration.
 	flag.Parse()
@@ -114,11 +123,19 @@ func initFlags() (errors []error) {
 	flags.LeaderElect = viper.GetBool(flagLeaderElect)
 	flags.MetricsBindAddress = viper.GetString(flagMetricsBindAddres)
 	flags.Provider = viper.GetString(flagProvider)
+	flags.VaultAddr = viper.GetString(flagVaultAddr)
+	flags.VaultToken = viper.GetString(flagVaultToken)
 
 	// Validation.
 
 	if flags.Provider != providerAWS && flags.Provider != providerAzure {
 		errors = append(errors, fmt.Errorf("--%s must be either \"%s\" or \"%s\"", flagProvider, providerAWS, providerAzure))
+	}
+	if flags.VaultAddr == "" {
+		errors = append(errors, fmt.Errorf("--%s flag or VAULT_ADDR environment variable must be set", flagVaultAddr))
+	}
+	if flags.VaultToken == "" {
+		errors = append(errors, fmt.Errorf("--%s flag or VAULT_TOKEN environment variable must be set", flagVaultToken))
 	}
 	if flags.Provider == providerAWS && (flags.AWSAccessKeyID == "" || flags.AWSAccessKeySecret == "") {
 		errors = append(errors, fmt.Errorf("when \"aws\" provider is set, --%s and --%s must not be empty", flagAWSAccessKeyID, flagAWSAccessKeySecret))
@@ -186,6 +203,22 @@ func mainE(ctx context.Context) error {
 		return microerror.Mask(err)
 	}
 
+	var vaultClient *vaultapi.Client
+	{
+		c := vaultapi.DefaultConfig()
+		c.Address = flags.VaultAddr
+		vaultClient, err = vaultapi.NewClient(c)
+		if err != nil {
+			return nil
+		}
+		vaultClient.SetToken(flags.VaultToken)
+
+		// Check vault connectivity.
+		_, err := vaultClient.Auth().Token().LookupSelf()
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
 	var certsSearcher *certs.Searcher
 	{
 		clients, err := k8sclient.NewClients(k8sclient.ClientsConfig{
@@ -257,6 +290,7 @@ func mainE(ctx context.Context) error {
 		Client:          mgr.GetClient(),
 		Log:             log,
 		MigratorFactory: migratorFactory,
+		VaultClient:     vaultClient,
 		Scheme:          mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		return microerror.Mask(err)
@@ -269,4 +303,10 @@ func mainE(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func must(err error) {
+	if err != nil {
+		panic(microerror.Pretty(err, true))
+	}
 }

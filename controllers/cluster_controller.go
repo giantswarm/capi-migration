@@ -26,6 +26,7 @@ import (
 	"github.com/giantswarm/micrologger"
 	"github.com/giantswarm/micrologger/loggermeta"
 	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
+	vaultapi "github.com/hashicorp/vault/api"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,6 +44,7 @@ type ClusterReconciler struct {
 	Log             micrologger.Logger
 	MigratorFactory migration.MigratorFactory
 	TenantCluster   tenantcluster.TenantCluster
+	VaultClient     *vaultapi.Client
 	Scheme          *runtime.Scheme
 
 	loopSeq int64

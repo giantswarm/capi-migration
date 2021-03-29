@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: ensure-vault-token
+        env:
+        - name: VAULT_ADDR
+          value: 'https://vault.gremlin.germanywestcentral.azure.gigantic.io:443'
+        - name: VAULT_ROLE
+          value: "capi-migration"
+      containers:
+      - name: manager
+        args:
+        - --provider=azure
+        env:
+        - name: VAULT_ADDR
+          value: 'https://vault.gremlin.germanywestcentral.azure.gigantic.io:443'

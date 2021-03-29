@@ -19,7 +19,7 @@ require (
 	github.com/onsi/ginkgo v1.14.2
 	github.com/onsi/gomega v1.10.3
 	github.com/spf13/pflag v1.0.5
-	github.com/spf13/viper v1.7.1
+	github.com/spf13/viper v1.6.2
 	k8s.io/api v0.18.9
 	k8s.io/apimachinery v0.18.9
 	k8s.io/client-go v0.18.9
@@ -32,6 +32,8 @@ require (
 
 replace (
 	github.com/coreos/etcd => github.com/coreos/etcd v3.3.24+incompatible
+	github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.2
+	github.com/gorilla/websocket => github.com/gorilla/websocket v1.4.2
 	sigs.k8s.io/cluster-api => github.com/giantswarm/cluster-api v0.3.13-gs
 	sigs.k8s.io/cluster-api-provider-azure => github.com/giantswarm/cluster-api-provider-azure v0.4.12-gsalpha3
 )

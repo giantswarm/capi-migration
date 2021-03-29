@@ -19,26 +19,14 @@ images:
     newName: "{{ .Values.registry.domain }}/{{ .Values.image.name }}"
     newTag: "{{ .Values.image.tag }}"
 
-bases:
-  - ../giantswarm
-
 resources:
+  - ../default
   - manager_config_map.yaml
   - manager_secret.yaml
 
+components:
+  - ../components/psp
+  - ../components/vault-access
+
 patchesStrategicMerge:
   - manager_patch.yaml
-
-configMapGenerator:
-  - name: controller-manager
-    namespace: system
-    behavior: replace
-    files:
-      - config.yaml
-
-secretGenerator:
-  - name: controller-manager
-    namespace: system
-    behavior: replace
-    files:
-      - secret.yaml
