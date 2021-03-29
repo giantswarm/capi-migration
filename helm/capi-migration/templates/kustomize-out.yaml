@@ -243,6 +243,7 @@ data:
     leader-elect: {{ .Values.leaderElect }}
     metrics-bind-address: {{ .Values.metricsBindAddress | quote }}
     provider: {{ .Values.provider | quote }}
+    vault-addr: {{ .Values.vaultAddr | quote }}
 kind: ConfigMap
 metadata:
   annotations:
@@ -260,8 +261,6 @@ metadata:
   namespace: '{{ .Release.Namespace }}'
 ---
 apiVersion: v1
-data:
-  secret.yaml: ""
 kind: Secret
 metadata:
   annotations:
@@ -277,7 +276,27 @@ metadata:
     helm.sh/chart: '{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}'
   name: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-controller-manager'
   namespace: '{{ .Release.Namespace }}'
+stringData:
+  secret.yaml: ""
 type: Opaque
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  annotations:
+    meta.helm.sh/release-name: '{{ .Release.Name }}'
+    meta.helm.sh/release-namespace: '{{ .Release.Namespace }}'
+  labels:
+    app.giantswarm.io/branch: '{{ .Values.project.branch }}'
+    app.giantswarm.io/commit: '{{ .Values.project.commit }}'
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/managed-by: '{{ .Release.Service }}'
+    app.kubernetes.io/name: '{{ .Chart.Name | trunc 63 | trimSuffix "-" }}'
+    app.kubernetes.io/version: '{{ .Chart.AppVersion }}'
+    control-plane: controller-manager
+    helm.sh/chart: '{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}'
+  name: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-controller-manager-vault-token'
+  namespace: '{{ .Release.Namespace }}'
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -325,10 +344,16 @@ spec:
     spec:
       containers:
       - args:
-        - --config=/var/run/controller-manager/config.yaml
-        - --config=/var/run/controller-manager/secret.yaml
+        - --config=/var/run/controller-manager-cm/config.yaml
+        - --config=/var/run/controller-manager-secret/secret.yaml
         command:
         - /manager
+        env:
+        - name: VAULT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: token
+              name: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-controller-manager-vault-token'
         image: '{{ .Values.registry.domain }}/{{ .Values.image.name }}:{{ .Values.image.tag }}'
         name: manager
         resources:
@@ -339,12 +364,26 @@ spec:
             cpu: 100m
             memory: 20Mi
         volumeMounts:
-        - mountPath: /var/run/controller-manager/config.yaml
+        - mountPath: /var/run/controller-manager-cm/config.yaml
           name: controller-manager-cm
           readOnly: true
-        - mountPath: /var/run/controller-manager/secret.yaml
+        - mountPath: /var/run/controller-manager-secret/secret.yaml
           name: controller-manager-secret
           readOnly: true
+      initContainers:
+      - args:
+        - --vault-address=$(VAULT_ADDR)
+        - --vault-role=$(VAULT_ROLE)
+        - --vault-token-secret-name={{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-controller-manager-vault-token
+        - --vault-token-secret-namespace={{ .Release.Namespace }}
+        env:
+        - name: VAULT_ADDR
+          value: '{{ .Values.vaultAddr }}'
+        - name: VAULT_ROLE
+          value: '{{ .Values.vaultRole }}'
+        image: giantswarm/k8s-jwt-to-vault-token:0.1.0
+        imagePullPolicy: Always
+        name: ensure-vault-token
       securityContext:
         runAsGroup: 1000
         runAsUser: 1000

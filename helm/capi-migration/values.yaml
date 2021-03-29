@@ -2,7 +2,7 @@ leaderElect: false
 metricsBindAddress: ":8080"
 provider: ""
 vaultAddr: ""
-vaultToken: ""
+vaultRole: "capi-migration"
 
 # Generic configuration.
 

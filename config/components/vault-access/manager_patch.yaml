@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: ensure-vault-token
+        args:
+        - --vault-address=$(VAULT_ADDR)
+        - --vault-role=$(VAULT_ROLE)
+        - --vault-token-secret-name=$(VAULT_TOKEN_SECRET_NAME)
+        - --vault-token-secret-namespace=$(NAMESPACE)
+        image: "ensure-vault-token:latest"
+        imagePullPolicy: Always
+        env:
+        - name: VAULT_ADDR
+          value: __REPLACE__VAULT_ADDR__
+        - name: VAULT_ROLE
+          value: __REPLACE__VAULT_ROLE__
+      containers:
+      - name: manager
+        env:
+        - name: VAULT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: token
+              name: controller-manager-vault-token

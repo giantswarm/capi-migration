@@ -26,6 +26,7 @@ resources:
 
 components:
   - ../components/psp
+  - ../components/vault-access
 
 patchesStrategicMerge:
   - manager_patch.yaml

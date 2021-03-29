@@ -1,5 +1,5 @@
-bases:
-- ../giantswarm-psp
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
 
 resources:
 - secret.yaml
@@ -10,7 +10,7 @@ images:
   newTag: 0.1.0
 
 patchesStrategicMerge:
-- manager_init_container_patch.yaml
+- manager_patch.yaml
 
 vars:
 - fieldref:
