@@ -11,7 +11,7 @@ require (
 	github.com/aws/aws-sdk-go v1.38.8
 	github.com/giantswarm/apiextensions/v3 v3.22.0
 	github.com/giantswarm/certs/v3 v3.0.0
-	github.com/giantswarm/k8sclient/v4 v4.0.0
+	github.com/giantswarm/k8sclient/v4 v4.1.0
 	github.com/giantswarm/microerror v0.3.0
 	github.com/giantswarm/micrologger v0.5.0
 	github.com/giantswarm/tenantcluster/v3 v3.0.0
