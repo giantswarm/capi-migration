@@ -3,21 +3,21 @@ module github.com/giantswarm/capi-migration
 go 1.16
 
 require (
-	github.com/Azure/azure-sdk-for-go v52.5.0+incompatible
+	github.com/Azure/azure-sdk-for-go v52.6.0+incompatible
 	github.com/Azure/go-autorest/autorest v0.11.17
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.7
 	github.com/Azure/go-autorest/autorest/to v0.4.0
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
-	github.com/aws/aws-sdk-go v1.36.26
+	github.com/aws/aws-sdk-go v1.38.8
 	github.com/giantswarm/apiextensions/v3 v3.22.0
-	github.com/giantswarm/certs/v3 v3.0.0
-	github.com/giantswarm/k8sclient/v4 v4.0.0
+	github.com/giantswarm/certs/v3 v3.1.1
+	github.com/giantswarm/k8sclient/v4 v4.1.0
 	github.com/giantswarm/microerror v0.3.0
 	github.com/giantswarm/micrologger v0.5.0
 	github.com/giantswarm/tenantcluster/v3 v3.0.0
 	github.com/hashicorp/vault/api v1.0.4
-	github.com/onsi/ginkgo v1.14.2
-	github.com/onsi/gomega v1.10.3
+	github.com/onsi/ginkgo v1.15.2
+	github.com/onsi/gomega v1.11.0
 	github.com/spf13/pflag v1.0.5
 	k8s.io/api v0.18.9
 	k8s.io/apimachinery v0.18.9
