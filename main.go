@@ -88,7 +88,7 @@ func initFlags() (errors []error) {
 	// Flag/configuration names.
 	const (
 		flagAWSAccessKeyID     = "aws-access-id"
-		flagAWSAccessKeySecret = "aws-access-secret" //lint:nosec
+		flagAWSAccessKeySecret = "aws-access-secret" //lint:gosec
 		flagLeaderElect        = "leader-elect"
 		flagMetricsBindAddres  = "metrics-bind-address"
 		flagProvider           = "provider"
@@ -295,10 +295,4 @@ func mainE(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func must(err error) {
-	if err != nil {
-		panic(microerror.Pretty(err, true))
-	}
 }
