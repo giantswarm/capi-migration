@@ -88,7 +88,7 @@ func initFlags() (errors []error) {
 	// Flag/configuration names.
 	const (
 		flagAWSAccessKeyID     = "aws-access-id"
-		flagAWSAccessKeySecret = "aws-access-secret" //lint:gosec
+		flagAWSAccessKeySecret = "aws-access-secret" //nolint:gosec
 		flagLeaderElect        = "leader-elect"
 		flagMetricsBindAddres  = "metrics-bind-address"
 		flagProvider           = "provider"
