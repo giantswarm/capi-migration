@@ -85,9 +85,6 @@ var flags = struct {
 }{}
 
 func initFlags() (errors []error) {
-	var configPaths []string
-	flag.StringArrayVar(&configPaths, "config", []string{}, "List of paths to configuration file in yaml format with flat, kebab-case keys.")
-
 	// Flag/configuration names.
 	const (
 		flagAWSAccessKeyID     = "aws-access-id"
@@ -105,8 +102,8 @@ func initFlags() (errors []error) {
 	flag.BoolVar(&flags.LeaderElect, flagLeaderElect, false, "Enable leader election for controller manager.")
 	flag.StringVar(&flags.MetricsBindAddress, flagMetricsBindAddres, ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&flags.Provider, flagProvider, "", "Provider name for the migration.")
-	flag.String(flagVaultAddr, "", "The address of the vault to connect to. Defaults to VAULT_ADDR.")
-	flag.String(flagVaultToken, "", "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
+	flag.StringVar(&flags.VaultAddr, flagVaultAddr, "", "The address of the vault to connect to. Defaults to VAULT_ADDR.")
+	flag.StringVar(&flags.VaultToken, flagVaultToken, "", "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
 
 	// Parse flags and configuration.
 	flag.Parse()
@@ -118,7 +115,7 @@ func initFlags() (errors []error) {
 		flags.VaultAddr = os.Getenv("VAULT_ADDR")
 	}
 	if flags.VaultToken == "" {
-		flags.VaultToken = os.Getenv("VAULT_ADDR")
+		flags.VaultToken = os.Getenv("VAULT_TOKEN")
 	}
 
 	// Validation.

@@ -5,9 +5,9 @@ metadata:
   namespace: system
 data:
   CAPI_MIGRATION_LEADER_ELECT: '{{ .Values.leaderElect }}'
-  CAPI_MIGRATION_METRICS_BIND_ADDRESS: '{{ .Values.metricsBindAddress | quote }}'
-  CAPI_MIGRATION_PROVIDER: '{{ .Values.provider | quote }}'
-  CAPI_MIGRATION_VAULT_ADDR: '{{ .Values.vaultAddr | quote }}'
+  CAPI_MIGRATION_METRICS_BIND_ADDRESS: '{{ .Values.metricsBindAddress }}'
+  CAPI_MIGRATION_PROVIDER: '{{ .Values.provider }}'
+  CAPI_MIGRATION_VAULT_ADDR: '{{ .Values.vaultAddr }}'
 ---
 apiVersion: v1
 kind: Secret

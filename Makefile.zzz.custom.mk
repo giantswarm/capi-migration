@@ -33,7 +33,6 @@ undeploy: manifests
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: CHART_TEMPLATE_FILE := helm/$(APPLICATION)/templates/kustomize-out.yaml
 manifests: controller-gen
-	exit 7
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	mkdir -p $(shell dirname $(CHART_TEMPLATE_FILE))
 	kustomize build config/helm -o '$(CHART_TEMPLATE_FILE)'
