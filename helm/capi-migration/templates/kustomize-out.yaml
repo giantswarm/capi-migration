@@ -377,6 +377,9 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
+        volumeMounts:
+        - mountPath: /etc/ssl/certs/
+          name: ssl-certs
       initContainers:
       - args:
         - --vault-address=$(VAULT_ADDR)
@@ -396,3 +399,7 @@ spec:
         runAsUser: 1000
       serviceAccountName: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-controller-manager'
       terminationGracePeriodSeconds: 10
+      volumes:
+      - hostPath:
+          path: /etc/ssl/certs/
+        name: ssl-certs

@@ -28,3 +28,11 @@ spec:
             secretKeyRef:
               key: token
               name: controller-manager-vault-token
+        volumeMounts:
+        # We have self signed CA for vault so it needs to be mounted.
+        - name: ssl-certs
+          mountPath: /etc/ssl/certs/
+      volumes:
+      - name: ssl-certs
+        hostPath:
+          path: /etc/ssl/certs/
