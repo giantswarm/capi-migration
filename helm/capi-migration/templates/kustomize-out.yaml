@@ -382,6 +382,8 @@ spec:
         - mountPath: /var/run/controller-manager-secret/secret.yaml
           name: controller-manager-secret
           readOnly: true
+        - mountPath: /etc/ssl/certs/
+          name: ssl-certs
       initContainers:
       - args:
         - --vault-address=$(VAULT_ADDR)
@@ -408,3 +410,6 @@ spec:
       - name: controller-manager-secret
         secret:
           secretName: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-controller-manager'
+      - hostPath:
+          path: /etc/ssl/certs/
+        name: ssl-certs
