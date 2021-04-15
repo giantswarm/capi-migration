@@ -21,8 +21,7 @@ images:
 
 resources:
   - ../default
-  - manager_config_map.yaml
-  - manager_secret.yaml
+  - manager_config.yaml
 
 components:
   - ../components/psp

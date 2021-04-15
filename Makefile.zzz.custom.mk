@@ -11,20 +11,11 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+YQ := docker run --rm -v "${PWD}":/workdir mikefarah/yq
+
 # Build manager binary
 manager: generate fmt vet
 	go build -o bin/manager main.go
-
-run:
-	@echo "Deprecated: use \"make run-aws\" or \"make run-azure\"" >&2 && exit 1
-
-# Run against the configured Kubernetes cluster in ~/.kube/config
-run-aws: generate fmt vet manifests
-	go run ./main.go --provider=aws
-
-# Run against the configured Kubernetes cluster in ~/.kube/config
-run-azure: generate fmt vet manifests
-	go run ./main.go --provider=azure
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: NAME_SUFFIX ?= $(USER)
@@ -40,7 +31,7 @@ undeploy: manifests
 	kustomize build config/dev | kubectl delete -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: CHART_TEMPLATE_FILE := $(shell ls -d helm/$$(basename $$(go list -m)))/templates/kustomize-out.yaml
+manifests: CHART_TEMPLATE_FILE := helm/$(APPLICATION)/templates/kustomize-out.yaml
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	mkdir -p $(shell dirname $(CHART_TEMPLATE_FILE))

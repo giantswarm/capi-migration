@@ -32,23 +32,23 @@ import (
 	"github.com/giantswarm/tenantcluster/v3/pkg/tenantcluster"
 	vaultapi "github.com/hashicorp/vault/api"
 	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	capzv1alpha3 "sigs.k8s.io/cluster-api-provider-azure/api/v1alpha3"
 	expcapzv1alpha3 "sigs.k8s.io/cluster-api-provider-azure/exp/api/v1alpha3"
+	capiv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	bootstrapkubeadmv1alpha3 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
 	controlplanekubeadmv1alpha3 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha3"
 	expcapiv1alpha3 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	capiv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	// +kubebuilder:scaffold:imports
 
 	"github.com/giantswarm/capi-migration/controllers"
 	"github.com/giantswarm/capi-migration/pkg/migration"
+	"github.com/giantswarm/capi-migration/pkg/project"
 )
 
 const (
@@ -85,13 +85,10 @@ var flags = struct {
 }{}
 
 func initFlags() (errors []error) {
-	var configPaths []string
-	flag.StringArrayVar(&configPaths, "config", []string{}, "List of paths to configuration file in yaml format with flat, kebab-case keys.")
-
 	// Flag/configuration names.
 	const (
 		flagAWSAccessKeyID     = "aws-access-id"
-		flagAWSAccessKeySecret = "aws-access-secret" /* #nosec */
+		flagAWSAccessKeySecret = "aws-access-secret" //nolint:gosec
 		flagLeaderElect        = "leader-elect"
 		flagMetricsBindAddres  = "metrics-bind-address"
 		flagProvider           = "provider"
@@ -100,36 +97,34 @@ func initFlags() (errors []error) {
 	)
 
 	// Flag binding.
-	flag.String(flagAWSAccessKeyID, "", "AWS access key for MC.")
-	flag.String(flagAWSAccessKeySecret, "", "AWS secret key for MC.")
-	flag.Bool(flagLeaderElect, false, "Enable leader election for controller manager.")
-	flag.String(flagMetricsBindAddres, ":8080", "The address the metric endpoint binds to.")
-	flag.String(flagProvider, "", "Provider name for the migration.")
-	flag.String(flagVaultAddr, "", "The address of the vault to connect to. Defaults to VAULT_ADDR.")
-	must(microerror.Mask(viper.BindEnv(flagVaultAddr, "VAULT_ADDR")))
-	flag.String(flagVaultToken, "", "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
-	must(microerror.Mask(viper.BindEnv(flagVaultAddr, "VAULT_TOKEN")))
+	flag.StringVar(&flags.AWSAccessKeyID, flagAWSAccessKeyID, "", "AWS access key for MC.")
+	flag.StringVar(&flags.AWSAccessKeySecret, flagAWSAccessKeySecret, "", "AWS secret key for MC.")
+	flag.BoolVar(&flags.LeaderElect, flagLeaderElect, false, "Enable leader election for controller manager.")
+	flag.StringVar(&flags.MetricsBindAddress, flagMetricsBindAddres, ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&flags.Provider, flagProvider, "", "Provider name for the migration.")
+	flag.StringVar(&flags.VaultAddr, flagVaultAddr, "", "The address of the vault to connect to. Defaults to VAULT_ADDR.")
+	flag.StringVar(&flags.VaultToken, flagVaultToken, "", "The token to use to authenticate to vault. Defaults to VAULT_TOKEN.")
 
 	// Parse flags and configuration.
 	flag.Parse()
-	if err := initViper(configPaths); err != nil {
-		errors = append(errors, fmt.Errorf("failed to read configuration with error: %s", err))
-		return
-	}
+	errors = append(errors, initFlagsFromEnv()...)
 
-	// Value binding.
-	flags.AWSAccessKeyID = viper.GetString(flagAWSAccessKeyID)
-	flags.AWSAccessKeySecret = viper.GetString(flagAWSAccessKeySecret)
-	flags.LeaderElect = viper.GetBool(flagLeaderElect)
-	flags.MetricsBindAddress = viper.GetString(flagMetricsBindAddres)
-	flags.Provider = viper.GetString(flagProvider)
-	flags.VaultAddr = viper.GetString(flagVaultAddr)
-	flags.VaultToken = viper.GetString(flagVaultToken)
+	// Extra env bindings.
+
+	if flags.VaultAddr == "" {
+		flags.VaultAddr = os.Getenv("VAULT_ADDR")
+	}
+	if flags.VaultToken == "" {
+		flags.VaultToken = os.Getenv("VAULT_TOKEN")
+	}
 
 	// Validation.
 
 	if flags.Provider != providerAWS && flags.Provider != providerAzure {
 		errors = append(errors, fmt.Errorf("--%s must be either \"%s\" or \"%s\"", flagProvider, providerAWS, providerAzure))
+	}
+	if flags.Provider == providerAWS && (flags.AWSAccessKeyID == "" || flags.AWSAccessKeySecret == "") {
+		errors = append(errors, fmt.Errorf("when \"aws\" provider is set, --%s and --%s must not be empty", flagAWSAccessKeyID, flagAWSAccessKeySecret))
 	}
 	if flags.VaultAddr == "" {
 		errors = append(errors, fmt.Errorf("--%s flag or VAULT_ADDR environment variable must be set", flagVaultAddr))
@@ -137,31 +132,28 @@ func initFlags() (errors []error) {
 	if flags.VaultToken == "" {
 		errors = append(errors, fmt.Errorf("--%s flag or VAULT_TOKEN environment variable must be set", flagVaultToken))
 	}
-	if flags.Provider == providerAWS && (flags.AWSAccessKeyID == "" || flags.AWSAccessKeySecret == "") {
-		errors = append(errors, fmt.Errorf("when \"aws\" provider is set, --%s and --%s must not be empty", flagAWSAccessKeyID, flagAWSAccessKeySecret))
-	}
 
 	return
 }
 
-func initViper(configPaths []string) (errors []error) {
-	err := viper.BindPFlags(flag.CommandLine)
-	if err != nil {
-		errors = append(errors, err)
-		return
-	}
-
-	if len(configPaths) == 0 {
-		return nil
-	}
-	for _, p := range configPaths {
-		viper.AddConfigPath(p)
-	}
-	err = viper.ReadInConfig()
-	if err != nil {
-		errors = append(errors, err)
-		return
-	}
+func initFlagsFromEnv() (errors []error) {
+	flag.CommandLine.VisitAll(func(f *flag.Flag) {
+		if f.Changed {
+			return
+		}
+		env := project.Name() + "_" + f.Name
+		env = strings.ReplaceAll(env, ".", "_")
+		env = strings.ReplaceAll(env, "-", "_")
+		env = strings.ToUpper(env)
+		v, ok := os.LookupEnv(env)
+		if !ok {
+			return
+		}
+		err := f.Value.Set(v)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("failed to set --%s value using %q environment variable", f.Name, env))
+		}
+	})
 
 	return
 }
@@ -173,7 +165,7 @@ func main() {
 		for i := range errs {
 			ss[i] = errs[i].Error()
 		}
-		fmt.Fprintf(os.Stderr, "Error: %s\n", strings.Join(ss, "\n Error:"))
+		fmt.Fprintf(os.Stderr, "Error: %s\n", strings.Join(ss, "\nError: "))
 		os.Exit(2)
 	}
 
@@ -303,10 +295,4 @@ func mainE(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func must(err error) {
-	if err != nil {
-		panic(microerror.Pretty(err, true))
-	}
 }

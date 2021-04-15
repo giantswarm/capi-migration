@@ -251,11 +251,10 @@ subjects:
 ---
 apiVersion: v1
 data:
-  config.yaml: |
-    leader-elect: {{ .Values.leaderElect }}
-    metrics-bind-address: {{ .Values.metricsBindAddress | quote }}
-    provider: {{ .Values.provider | quote }}
-    vault-addr: {{ .Values.vaultAddr | quote }}
+  CAPI_MIGRATION_LEADER_ELECT: '{{ .Values.leaderElect }}'
+  CAPI_MIGRATION_METRICS_BIND_ADDRESS: '{{ .Values.metricsBindAddress }}'
+  CAPI_MIGRATION_PROVIDER: '{{ .Values.provider }}'
+  CAPI_MIGRATION_VAULT_ADDR: '{{ .Values.vaultAddr }}'
 kind: ConfigMap
 metadata:
   annotations:
@@ -288,8 +287,7 @@ metadata:
     helm.sh/chart: '{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}'
   name: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-controller-manager'
   namespace: '{{ .Release.Namespace }}'
-stringData:
-  secret.yaml: ""
+stringData: {}
 type: Opaque
 ---
 apiVersion: v1
@@ -356,8 +354,7 @@ spec:
     spec:
       containers:
       - args:
-        - --config=/var/run/controller-manager-cm/config.yaml
-        - --config=/var/run/controller-manager-secret/secret.yaml
+        - --leader-elect
         command:
         - /manager
         env:
@@ -366,6 +363,11 @@ spec:
             secretKeyRef:
               key: token
               name: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-controller-manager-vault-token'
+        envFrom:
+        - configMapRef:
+            name: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-controller-manager'
+        - secretRef:
+            name: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-controller-manager'
         image: '{{ .Values.registry.domain }}/{{ .Values.image.name }}:{{ .Values.image.tag }}'
         name: manager
         resources:
@@ -376,12 +378,6 @@ spec:
             cpu: 100m
             memory: 20Mi
         volumeMounts:
-        - mountPath: /var/run/controller-manager-cm/config.yaml
-          name: controller-manager-cm
-          readOnly: true
-        - mountPath: /var/run/controller-manager-secret/secret.yaml
-          name: controller-manager-secret
-          readOnly: true
         - mountPath: /etc/ssl/certs/
           name: ssl-certs
       initContainers:
@@ -404,12 +400,6 @@ spec:
       serviceAccountName: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-controller-manager'
       terminationGracePeriodSeconds: 10
       volumes:
-      - configMap:
-          name: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-controller-manager'
-        name: controller-manager-cm
-      - name: controller-manager-secret
-        secret:
-          secretName: '{{- .Release.Name | replace "." "-" | trunc 33 | trimSuffix "-" -}}-controller-manager'
       - hostPath:
           path: /etc/ssl/certs/
         name: ssl-certs
