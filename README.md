@@ -43,9 +43,15 @@
 To try things quickly you can run `make run`. That will run `main.go` against
 a current kubectl context (i.e. `kubectl config current-context`).
 
-To make it work you need to export vault credentials:
+All flags that can be passed to the `main.go` can be also passed as environment
+variables prefixed with `CAPI_MIGRATION_`. E.g. `--metrics-bind-address=:9090`
+can be set using `CAPI_MIGRATION_METRICS_BIND_ADDRESS=:9090 make run`.
+
+To make it work you need to export vault credentials and set the provider you
+wish to run against:
 
 ```sh
+export PROVIDER="aws|azure"
 export VAULT_ADDR="https://..."
 export VAULT_TOKEN="..."
 export VAULT_CAPATH="/..."
