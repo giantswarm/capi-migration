@@ -18,7 +18,7 @@ jobs:
         run: |
           curl -L https://go.kubebuilder.io/dl/${{ env.version }}/linux/amd64 | tar -xz -C /tmp
           sudo mv /tmp/kubebuilder_${{ env.version }}_linux_amd64 /usr/local/kubebuilder
-      - uses: actions/cache@v2.1.4
+      - uses: actions/cache@v2.1.6
         with:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           path: |
