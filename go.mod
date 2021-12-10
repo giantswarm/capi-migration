@@ -8,7 +8,7 @@ require (
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.7
 	github.com/Azure/go-autorest/autorest/to v0.4.0
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
-	github.com/aws/aws-sdk-go v1.38.8
+	github.com/aws/aws-sdk-go v1.40.2
 	github.com/giantswarm/apiextensions/v3 v3.22.0
 	github.com/giantswarm/certs/v3 v3.1.1
 	github.com/giantswarm/k8sclient/v4 v4.1.0
@@ -16,14 +16,14 @@ require (
 	github.com/giantswarm/micrologger v0.5.0
 	github.com/giantswarm/tenantcluster/v3 v3.0.0
 	github.com/hashicorp/vault/api v1.0.4
-	github.com/onsi/ginkgo v1.15.2
-	github.com/onsi/gomega v1.11.0
+	github.com/onsi/ginkgo v1.16.4
+	github.com/onsi/gomega v1.14.0
 	github.com/spf13/pflag v1.0.5
 	k8s.io/api v0.18.9
 	k8s.io/apimachinery v0.18.9
 	k8s.io/client-go v0.18.9
-	sigs.k8s.io/cluster-api v0.3.13
-	sigs.k8s.io/cluster-api-provider-aws v0.6.4
+	sigs.k8s.io/cluster-api v0.3.22
+	sigs.k8s.io/cluster-api-provider-aws v0.6.8
 	sigs.k8s.io/cluster-api-provider-azure v0.0.0
 	sigs.k8s.io/controller-runtime v0.6.3
 	sigs.k8s.io/yaml v1.2.0
