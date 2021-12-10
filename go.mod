@@ -19,9 +19,9 @@ require (
 	github.com/onsi/ginkgo v1.15.2
 	github.com/onsi/gomega v1.11.0
 	github.com/spf13/pflag v1.0.5
-	k8s.io/api v0.18.9
-	k8s.io/apimachinery v0.18.9
-	k8s.io/client-go v0.18.9
+	k8s.io/api v0.18.19
+	k8s.io/apimachinery v0.18.19
+	k8s.io/client-go v0.18.19
 	sigs.k8s.io/cluster-api v0.3.13
 	sigs.k8s.io/cluster-api-provider-aws v0.6.4
 	sigs.k8s.io/cluster-api-provider-azure v0.0.0
